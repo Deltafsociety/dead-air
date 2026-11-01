@@ -29,7 +29,7 @@ jobs:
             target: aarch64-apple-darwin
             binary_name: deadair
             archive_name: deadair-macos-arm64.tar.gz
-          - os: macos-13
+          - os: macos-latest
             target: x86_64-apple-darwin
             binary_name: deadair
             archive_name: deadair-macos-x86_64.tar.gz
