@@ -1,19 +1,37 @@
-# DEADAIR
+```
+   ____  _________    ____  ___    ________ 
+  / __ \/ ____/   |  / __ \/   |  /  _/ __ \
+ / / / / __/ / /| | / / / / /| |  / // /_/ /
+/ /_/ / /___/ ___ |/ /_/ / ___ |_/ // _, _/ 
+/_____/_____/_/  |_/_____/_/  |_/___/_/ |_|  
+```
+
+> Offline-first Nostr station for terminal users, engineered for blackouts, mesh networks, and domestic intranet survival.
 
 [English](README.md) | [فارسی](README.fa.md)
 
-An offline-first, intranet Nostr terminal station built for digital blackouts, local mesh networks, and national intranet partitions.
+---
 
-Zero server infrastructure required. Zero hosting costs.
+### The Problem
+
+When international internet access is cut off during a blackout, services like Telegram, WhatsApp, Discord, and Signal go completely dark because their servers sit outside the country.
+
+However, domestic routing between local service providers and cities often remains operational.
+
+DEADAIR is built for that exact moment. It runs entirely inside your terminal, requires zero paid server infrastructure, and demands zero domain registrations. Any laptop or workstation running DEADAIR can act as a local or nationwide relay for friends and colleagues without sending a single packet outside domestic boundaries.
+
+---
+
+### Terminal Dashboard
 
 ```
 DEADAIR  [Alice] (ID: npub1...) [RELAY: ACTIVE :4869]  [NET: INTRANET]  [PEERS: 2]  [OUTBOX: 0]
 +-- Local Timeline (12 events) -----------------------++-- Relays and Intranet Nodes ----------------+
 | [14:22:01] YOU [Alice] (id: 86be7ae9..)             || [+] ws://127.0.0.1:4869 (1ms)              |
-|   | Testing local intranet broadcast during blackout|| [+] ws://5.234.12.80:4869 (14ms)           |
+|   | Testing domestic broadcast during network cutoff|| [+] ws://5.234.12.80:4869 (14ms)           |
 |                                                     ||                                            |
 | [14:22:18] * Bob (id: 4f10d291..)                   || Discovered LAN Peers:                      |
-|   | Received loud and clear over the mesh!          ||  LAN: 192.168.1.142:4869 [Bob]             |
+|   | Connected to your station from Isfahan.         ||  LAN: 192.168.1.142:4869 [Bob]             |
 +-----------------------------------------------------++--------------------------------------------+
 +-- Compose Broadcast Note [Kind 1] ----------------------------------------------------------------+
 |  >> Type your message or /command here..._                                                        |
@@ -23,100 +41,83 @@ DEADAIR  [Alice] (ID: npub1...) [RELAY: ACTIVE :4869]  [NET: INTRANET]  [PEERS: 
 
 ---
 
-## Key Features
+### Practical Real-World Workflow
 
-1. **Automatic Domestic IP Detection and Sharing**
-   * Automatically resolves your routable domestic network address.
-   * Press `[s]` or type `/share` to copy your node connection string: `ws://<your_ip>:4869 [handle]`.
-   * Share this address with contacts across Iran via SMS or local channels so they can connect directly to your station.
-
-2. **Persistent Domestic Relay Bookmarks Manager**
-   * Save and organize trusted domestic node addresses in `~/.config/deadair/domestic_relays.json`.
-   * Add a domestic node with `/bookmark add ws://<peer_ip>:4869 [name]`.
-   * Press `[b]` or type `/bookmark connect` to reconnect all saved domestic relays instantly.
-   * Auto-connects to saved bookmarks on startup.
-
-3. **Custom Handles and Nicknames (NIP-01 Metadata)**
-   * Set your display handle at any time by typing `/name <your_name>`.
-   * Automatically persists in `~/.config/deadair/identity.json` and publishes a signed Kind 0 metadata event to all connected relays.
-   * Other stations receive the metadata event and automatically display your chosen handle on their timelines.
-
-4. **National Intranet (NIN) and Blackout Resilience**
-   * Designed specifically for scenarios where international gateways are severed, but domestic inter-city routing remains available.
-   * Any computer or home connection running DEADAIR can act as a domestic relay with `[r]`.
-   * Friends across different cities can connect directly via domestic IP addresses.
-
-5. **Internet Communication via Free Public Relays**
-   * Toggle global internet relays on or off by pressing `[p]` or typing `/relay public`.
-   * Connects over secure WebSockets (`wss://`) to free, community-maintained global relays (`relay.damus.io`, `nos.lol`, `relay.primal.net`).
-   * If internet access goes down, DEADAIR automatically falls back to local intranet mode without interruption.
-
-6. **Intranet UDP Auto-Discovery**
-   * Uses UDP broadcasts on port 48690 to automatically find other DEADAIR nodes on the local Wi-Fi or LAN.
-
-7. **Persistent Offline Outbox**
-   * When completely air-gapped without reachable peers, notes are queued in `~/.config/deadair/outbox.json` and automatically flushed when connectivity is restored.
+1. **Launch the Station**: Run `deadair` in your terminal. Your cryptographic identity is generated offline on first run.
+2. **Set Your Handle**: Type `/name Alice` to choose a human-readable display name.
+3. **Start the Relay**: Press `[r]` to open the embedded WebSocket relay on port `4869`.
+4. **Share Your Address**: Press `[s]` or type `/share`. Copy your domestic connection string (for example `ws://5.x.x.x:4869 [Alice]`) and send it to your contacts via SMS or local chat.
+5. **Connect Across Cities**: Your contacts run `/bookmark add ws://5.x.x.x:4869 Alice`. Everyone is now part of an encrypted, sovereign domestic communication channel.
 
 ---
 
-## Commands and Shortcuts
+### Core Architecture
 
-### Terminal Commands (type into the input box and hit Enter)
-* `/share`: Display your domestic address and handle for sharing with peers.
-* `/ip`: Re-run domestic IP resolution.
-* `/name <nick>`: Set your display name and broadcast your profile.
-* `/bookmark add <url> [name]`: Save a domestic relay to bookmarks and connect.
-* `/bookmark remove <key>`: Remove a relay from bookmarks.
-* `/bookmark connect`: Reconnect to all saved domestic bookmarks.
-* `/relay add <url>`: Connect to any relay (and auto-bookmark).
-* `/relay public`: Toggle public internet relays.
-* `/help`: Show command help toast.
-
-### Keyboard Shortcuts
-| Key | Action |
-| :--- | :--- |
-| `i` or `Enter` | Enter compose or write mode |
-| `Enter` (in compose) | Broadcast note or execute command |
-| `Esc` or `Tab` | Switch between compose and normal navigation mode |
-| `s` | Show domestic share address and handle |
-| `b` | Reconnect all saved domestic relay bookmarks |
-| `r` or `F2` | Toggle embedded relay (`0.0.0.0:4869`) |
-| `p` | Toggle public internet relays (Damus, nos.lol, Primal) |
-| `c` | Clear local timeline display |
-| `q` or `Ctrl+C` | Quit station |
+* **Zero Central Infrastructure**: No sign-ups, no phone numbers, no passwords. Identity is a standard secp256k1 keypair stored in `~/.config/deadair/identity.json`.
+* **Automatic Domestic IP Resolution**: Probes local routing to discover your routable domestic address without manual network debugging.
+* **Persistent Relay Bookmarks**: Save trusted domestic nodes in `~/.config/deadair/domestic_relays.json` and reconnect all nodes instantly with `[b]`.
+* **Intranet UDP Beaconing**: On local Wi-Fi or LAN subnets, stations discover one another over UDP port 48690 with zero configuration.
+* **Store and Forward Outbox**: If all connections drop, notes are queued safely on disk in `~/.config/deadair/outbox.json` and broadcast automatically when a peer reconnects.
+* **Global Sync on Demand**: When international connectivity returns, hit `[p]` to toggle global relays (`damus.io`, `nos.lol`, `primal.net`) and bridge notes between domestic and global networks.
 
 ---
 
-## Installation
+### Quick Installation
 
-### One-Line Install (Linux and macOS)
-
-Run the following command in your terminal to install the `deadair` binary into `/usr/local/bin`:
+#### One-Liner (Linux and macOS)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash
 ```
 
-Once installed, launch the station anytime by running:
+Once installed, launch from any directory:
 ```bash
 deadair
 ```
 
----
-
-## Pre-built Binaries
-
-Pre-compiled static binaries for Linux, Windows, and macOS are available under GitHub Releases:
+#### Pre-built Binaries
+Static standalone binaries are available on the [Releases page](https://github.com/deltafsociety/dead-air/releases):
 * Linux (x86_64)
 * Windows (x86_64)
 * macOS Apple Silicon (ARM64)
 * macOS Intel (x86_64)
 
----
-
-## Building from Source
-
+#### Building from Source
 ```bash
 cargo build --release
 ./target/release/deadair
 ```
+
+---
+
+### Command and Shortcut Reference
+
+#### Interactive Commands
+* `/name <nick>`: Set your display handle and publish your profile.
+* `/share`: Output your domestic connection string and handle.
+* `/ip`: Re-run domestic network IP detection.
+* `/bookmark add <url> [name]`: Bookmark a domestic node and connect immediately.
+* `/bookmark remove <key>`: Remove a relay from bookmarks.
+* `/bookmark connect`: Reconnect to all bookmarked relays.
+* `/relay add <url>`: Connect to any WebSocket relay address.
+* `/relay public`: Toggle global internet relays on or off.
+* `/help`: Display inline command summary.
+
+#### Keyboard Controls
+| Key | Action |
+| :--- | :--- |
+| `i` or `Enter` | Enter compose mode |
+| `Enter` (in compose) | Broadcast message or execute command |
+| `Esc` or `Tab` | Switch between write mode and navigation mode |
+| `s` | Display domestic share address |
+| `b` | Reconnect all saved domestic bookmarks |
+| `r` or `F2` | Toggle embedded relay (`0.0.0.0:4869`) |
+| `p` | Toggle global public relays |
+| `c` | Clear the timeline screen |
+| `q` or `Ctrl+C` | Exit DEADAIR |
+
+---
+
+### License
+
+Open source under the MIT License. Built for digital sovereignty and resilient communication.
