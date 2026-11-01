@@ -94,7 +94,7 @@ DEADAIR  [Alice] (ID: npub1...) [RELAY: ACTIVE :4869]  [NET: INTRANET]  [PEERS: 
 دستور زیر را در ترمینال خود اجرا کنید تا فایل اجرایی `deadair` در مسیر `/usr/local/bin` نصب شود:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/delta/deadair/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash
 ```
 
 پس از اتمام نصب، در هر کجای ترمینال با وارد کردن دستور زیر برنامه اجرا خواهد شد:

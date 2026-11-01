@@ -2,6 +2,9 @@
 name = "deadair"
 version = "0.1.0"
 edition = "2024"
+authors = ["deltafsociety"]
+description = "Offline-first intranet Nostr station for blackouts and domestic network partitions"
+repository = "https://github.com/deltafsociety/dead-air"
 
 [dependencies]
 crossterm = "0.29.0"

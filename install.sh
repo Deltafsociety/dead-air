@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-REPO="delta/deadair"
+REPO="deltafsociety/dead-air"
 INSTALL_DIR="/usr/local/bin"
 
 OS="$(uname -s)"

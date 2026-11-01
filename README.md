@@ -94,7 +94,7 @@ DEADAIR  [Alice] (ID: npub1...) [RELAY: ACTIVE :4869]  [NET: INTRANET]  [PEERS: 
 Run the following command in your terminal to install the `deadair` binary into `/usr/local/bin`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/delta/deadair/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash
 ```
 
 Once installed, launch the station anytime by running:
