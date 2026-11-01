@@ -87,6 +87,23 @@ DEADAIR  [Alice] (ID: npub1...) [RELAY: ACTIVE :4869]  [NET: INTRANET]  [PEERS: 
 
 ---
 
+## روش‌های نصب
+
+### نصب با یک دستور (لینوکس و مک)
+
+دستور زیر را در ترمینال خود اجرا کنید تا فایل اجرایی `deadair` در مسیر `/usr/local/bin` نصب شود:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/delta/deadair/master/install.sh | bash
+```
+
+پس از اتمام نصب، در هر کجای ترمینال با وارد کردن دستور زیر برنامه اجرا خواهد شد:
+```bash
+deadair
+```
+
+---
+
 ## دریافت فایل‌های اجرایی آماده
 
 فایل‌های مستقل برای سیستم‌عامل‌های مختلف در بخش Releases مخزن گیت‌هاب قرار دارند:

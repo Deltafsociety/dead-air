@@ -87,6 +87,23 @@ DEADAIR  [Alice] (ID: npub1...) [RELAY: ACTIVE :4869]  [NET: INTRANET]  [PEERS: 
 
 ---
 
+## Installation
+
+### One-Line Install (Linux and macOS)
+
+Run the following command in your terminal to install the `deadair` binary into `/usr/local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/delta/deadair/master/install.sh | bash
+```
+
+Once installed, launch the station anytime by running:
+```bash
+deadair
+```
+
+---
+
 ## Pre-built Binaries
 
 Pre-compiled static binaries for Linux, Windows, and macOS are available under GitHub Releases:
