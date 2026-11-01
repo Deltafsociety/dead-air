@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DEADAIR // Offline and Intranet Nostr Station</title>
+  <style>
+    :root {
+      --bg: #f4f4ee;
+      --fg: #0a0a0a;
+      --accent: #00ffff;
+      --accent-alt: #ffea00;
+      --border: 3px solid #0a0a0a;
+      --shadow: 5px 5px 0 #0a0a0a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--fg);
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", "Courier New", monospace;
+      line-height: 1.5;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header {
+      border: var(--border);
+      box-shadow: var(--shadow);
+      background: #fff;
+      padding: 20px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      letter-spacing: -1px;
+      text-transform: uppercase;
+    }
+
+    .lang-switcher button {
+      background: var(--bg);
+      border: var(--border);
+      padding: 8px 16px;
+      font-family: inherit;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 #000;
+    }
+
+    .lang-switcher button.active {
+      background: var(--accent);
+      box-shadow: none;
+      transform: translate(2px, 2px);
+    }
+
+    .box {
+      border: var(--border);
+      box-shadow: var(--shadow);
+      background: #fff;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .box-title {
+      display: inline-block;
+      background: var(--fg);
+      color: #fff;
+      padding: 4px 12px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .highlight {
+      background: var(--accent-alt);
+      padding: 2px 6px;
+      font-weight: bold;
+    }
+
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .download-card {
+      border: var(--border);
+      padding: 16px;
+      background: var(--bg);
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      box-shadow: 4px 4px 0 #000;
+      transition: transform 0.05s;
+    }
+
+    .download-card:hover {
+      background: var(--accent);
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0 #000;
+    }
+
+    .download-card strong {
+      display: block;
+      font-size: 1.1rem;
+      margin-bottom: 4px;
+    }
+
+    .download-card span {
+      font-size: 0.85rem;
+      color: #444;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    th, td {
+      border: 2px solid #0a0a0a;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #0a0a0a;
+      color: #fff;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+    }
+
+    pre {
+      background: #0a0a0a;
+      color: #f4f4ee;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      margin: 12px 0;
+      border: var(--border);
+    }
+
+    .persian-section {
+      direction: rtl;
+      font-family: Vazirmatn, Tahoma, sans-serif;
+      text-align: right;
+    }
+
+    .persian-section table th,
+    .persian-section table td {
+      text-align: right;
+    }
+
+    .persian-section .box-title {
+      font-family: Vazirmatn, Tahoma, sans-serif;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    footer {
+      border-top: var(--border);
+      padding: 20px 0;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>DEADAIR</h1>
+        <p>Offline and Intranet Nostr Station</p>
+      </div>
+      <div class="lang-switcher">
+        <button id="btn-en" class="active" onclick="setLang('en')">ENGLISH</button>
+        <button id="btn-fa" onclick="setLang('fa')">فارسی</button>
+      </div>
+    </header>
+
+    <!-- ENGLISH CONTENT -->
+    <main id="content-en">
+      <div class="box">
+        <div class="box-title">System Overview</div>
+        <p>
+          DEADAIR is a lightweight, zero-dependency terminal user interface (TUI) communication station built in Rust.
+          It is engineered specifically for <span class="highlight">digital blackouts</span>, local mesh networks, and 
+          <span class="highlight">national intranet cutoffs</span> where international internet traffic is severed.
+        </p>
+        <p style="margin-top: 12px;">
+          It uses the decentralized Nostr protocol without requiring any paid servers, centralized accounts, or domain registries.
+          Your cryptographic identity is generated and stored locally on your machine.
+        </p>
+      </div>
+
+      <div class="box">
+        <div class="box-title">National Intranet Architecture</div>
+        <p>
+          During nationwide network shutdowns (such as the National Information Network scenario in Iran), foreign servers 
+          hosted in Europe or the US are blocked, rendering standard communication apps useless. 
+          However, domestic routing between local ISPs and cities remains operational.
+        </p>
+        <ul style="margin-left: 20px; margin-top: 12px;">
+          <li><strong>Embedded Relay:</strong> Any user can press <code>[r]</code> to start an internal WebSocket relay on <code>0.0.0.0:4869</code>. Other computers across Iran can connect directly to your domestic IP.</li>
+          <li><strong>Intranet UDP Discovery:</strong> On local Wi-Fi or LAN networks, DEADAIR discovers neighbor stations automatically on UDP port 48690.</li>
+          <li><strong>Offline Outbox:</strong> Notes drafted while completely disconnected are queued in local storage and broadcast automatically the instant a peer or relay connects.</li>
+          <li><strong>Global Mesh Bridge:</strong> When international access briefly returns, any node with both domestic and global relays enabled reconciles and gossips notes across both networks.</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Pre-built Binaries</div>
+        <p>Download standalone static binaries. No runtime dependencies needed.</p>
+        <div class="download-grid">
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-linux-x86_64.tar.gz">
+            <strong>Linux</strong>
+            <span>x86_64 (.tar.gz)</span>
+          </a>
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-windows-x86_64.zip">
+            <strong>Windows</strong>
+            <span>x86_64 (.zip)</span>
+          </a>
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-macos-arm64.tar.gz">
+            <strong>macOS Apple Silicon</strong>
+            <span>M1/M2/M3/M4 (.tar.gz)</span>
+          </a>
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-macos-x86_64.tar.gz">
+            <strong>macOS Intel</strong>
+            <span>x86_64 (.tar.gz)</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Commands Reference</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>/name &lt;handle&gt;</code></td>
+              <td>Set your station handle and broadcast a signed metadata event to all relays.</td>
+            </tr>
+            <tr>
+              <td><code>/relay add &lt;url&gt;</code></td>
+              <td>Connect to an intranet or internet relay (e.g. <code>ws://5.x.x.x:4869</code> or <code>wss://relay.damus.io</code>).</td>
+            </tr>
+            <tr>
+              <td><code>/relay public</code></td>
+              <td>Toggle connection to global public relays (Damus, nos.lol, Primal).</td>
+            </tr>
+            <tr>
+              <td><code>/help</code></td>
+              <td>Show available command summary.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table style="margin-top: 16px;">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>i</code> or <code>Enter</code></td>
+              <td>Enter compose mode to write notes or commands.</td>
+            </tr>
+            <tr>
+              <td><code>Esc</code> or <code>Tab</code></td>
+              <td>Exit compose mode to navigation mode.</td>
+            </tr>
+            <tr>
+              <td><code>r</code> or <code>F2</code></td>
+              <td>Toggle the embedded relay on or off (port 4869).</td>
+            </tr>
+            <tr>
+              <td><code>p</code></td>
+              <td>Toggle public internet relays.</td>
+            </tr>
+            <tr>
+              <td><code>c</code></td>
+              <td>Clear local timeline screen.</td>
+            </tr>
+            <tr>
+              <td><code>q</code></td>
+              <td>Quit DEADAIR.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Quick Start</div>
+        <pre># Run development build
+cargo run
+
+# Or run optimized release
+cargo build --release
+./target/release/deadair</pre>
+      </div>
+    </main>
+
+    <!-- PERSIAN CONTENT -->
+    <main id="content-fa" class="persian-section hidden">
+      <div class="box">
+        <div class="box-title">معرفی سامانه</div>
+        <p>
+          نرم‌افزار DEADAIR یک ابزار ارتباطی ترمینال متنی (TUI) سبک و بدون وابستگی است که با زبان راست (Rust) توسعه داده شده است.
+          این سامانه منحصرا برای شرایط <span class="highlight">قطع کامل اینترنت</span>، شبکه‌های محلی (مش) و 
+          <span class="highlight">محدودیت به شبکه ملی اطلاعات (اینترانت)</span> طراحی شده است.
+        </p>
+        <p style="margin-top: 12px;">
+          این ابزار از پروتکل غیرمتمرکز نوستر (Nostr) استفاده می‌کند و هیچ‌گونه وابستگی به سرورهای پولی، ثبت‌نام، شماره تماس، ایمیل یا دامنه‌های اینترنتی ندارد.
+          کلیدهای رمزنگاری شما به صورت محلی روی دستگاه خودتان ایجاد و ذخیره می‌شوند.
+        </p>
+      </div>
+
+      <div class="box">
+        <div class="box-title">عملکرد در شرایط اینترانت ملی</div>
+        <p>
+          هنگامی که دسترسی به اینترنت بین‌الملل قطع می‌شود، سرورهای خارجی از دسترس خارج شده و پیام‌رسان‌های معمولی متوقف می‌شوند.
+          با این حال، ارتباطات داخلی بین ارائه‌دهندگان اینترنت داخلی و شهرهای مختلف برقرار باقی می‌ماند.
+        </p>
+        <ul style="margin-right: 20px; margin-top: 12px;">
+          <li><strong>رله داخلی تعبیه‌شده:</strong> هر کاربر می‌تواند با فشردن کلید <code>[r]</code> سرور رله خود را روی پورت 4869 فعال کند. سایر افراد در سراسر کشور می‌توانند مستقیما به IP داخلی شما متصل شوند.</li>
+          <li><strong>کشف خودکار در شبکه محلی:</strong> در شبکه‌های وای‌فای یا شبکه محلی، دستگاه‌ها از طریق پورت UDP 48690 یکدیگر را به شکل خودکار پیدا می‌کنند.</li>
+          <li><strong>صندوق پیام‌های آفلاین:</strong> پیام‌هایی که در زمان قطع کامل نوشته می‌شوند، در حافظه محلی ذخیره شده و به محض برقراری اولین ارتباط به شکل خودکار ارسال می‌شوند.</li>
+          <li><strong>همگام‌سازی دوطرفه:</strong> به محض بازگشت موقت اینترنت جهانی، هر گره که به رله‌های داخلی و خارجی متصل باشد، پیام‌ها را میان هر دو شبکه تبادل می‌کند.</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <div class="box-title">دریافت فایل‌های اجرایی آماده</div>
+        <p>فایل اجرایی مستقل بدون نیاز به نصب پیش‌نیازها را برای سیستم‌عامل خود دریافت کنید.</p>
+        <div class="download-grid">
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-linux-x86_64.tar.gz">
+            <strong>لینوکس</strong>
+            <span>معماری x86_64 (.tar.gz)</span>
+          </a>
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-windows-x86_64.zip">
+            <strong>ویندوز</strong>
+            <span>معماری x86_64 (.zip)</span>
+          </a>
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-macos-arm64.tar.gz">
+            <strong>مک اواس اپل سیلیکون</strong>
+            <span>پردازنده‌های M1/M2/M3/M4 (.tar.gz)</span>
+          </a>
+          <a class="download-card" href="https://github.com/delta/deadair/releases/latest/download/deadair-macos-x86_64.tar.gz">
+            <strong>مک اواس اینتل</strong>
+            <span>معماری x86_64 (.tar.gz)</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="box-title">دستورات ترمینال</div>
+        <table>
+          <thead>
+            <tr>
+              <th>دستور</th>
+              <th>توضیحات</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>/name &lt;نام&gt;</code></td>
+              <td>تنظیم نام نمایشی و انتشار مشخصات هویتی برای سایر کاربران.</td>
+            </tr>
+            <tr>
+              <td><code>/relay add &lt;آدرس&gt;</code></td>
+              <td>افزودن آدرس یک رله داخلی یا اینترنتی (مانند <code>ws://5.x.x.x:4869</code>).</td>
+            </tr>
+            <tr>
+              <td><code>/relay public</code></td>
+              <td>اتصال یا قطع اتصال به رله‌های رایگان اینترنت جهانی.</td>
+            </tr>
+            <tr>
+              <td><code>/help</code></td>
+              <td>نمایش راهنمای دستورات.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table style="margin-top: 16px;">
+          <thead>
+            <tr>
+              <th>کلید</th>
+              <th>عملکرد</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>i</code> یا <code>Enter</code></td>
+              <td>ورود به حالت نوشتن پیام یا دستور.</td>
+            </tr>
+            <tr>
+              <td><code>Esc</code> یا <code>Tab</code></td>
+              <td>خروج از حالت نوشتن و ورود به حالت ناوبری.</td>
+            </tr>
+            <tr>
+              <td><code>r</code> یا <code>F2</code></td>
+              <td>روشن یا خاموش کردن رله داخلی روی پورت 4869.</td>
+            </tr>
+            <tr>
+              <td><code>p</code></td>
+              <td>تغییر وضعیت رله‌های عمومی اینترنت.</td>
+            </tr>
+            <tr>
+              <td><code>c</code></td>
+              <td>پاک کردن پیام‌های صفحه نمایش.</td>
+            </tr>
+            <tr>
+              <td><code>q</code></td>
+              <td>خروج از برنامه.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="box">
+        <div class="box-title">اجرای سریع از طریق سورس کد</div>
+        <pre># اجرای نسخه توسعه
+cargo run
+
+# ساخت نسخه نهایی بهینه‌شده
+cargo build --release
+./target/release/deadair</pre>
+      </div>
+    </main>
+
+    <footer>
+      <p>DEADAIR - Open Source, Offline-First, Intranet Nostr Protocol Implementation.</p>
+    </footer>
+  </div>
+
+  <script>
+    function setLang(lang) {
+      const enSection = document.getElementById('content-en');
+      const faSection = document.getElementById('content-fa');
+      const btnEn = document.getElementById('btn-en');
+      const btnFa = document.getElementById('btn-fa');
+
+      if (lang === 'fa') {
+        enSection.classList.add('hidden');
+        faSection.classList.remove('hidden');
+        btnFa.classList.add('active');
+        btnEn.classList.remove('active');
+        document.documentElement.lang = 'fa';
+      } else {
+        faSection.classList.add('hidden');
+        enSection.classList.remove('hidden');
+        btnEn.classList.add('active');
+        btnFa.classList.remove('active');
+        document.documentElement.lang = 'en';
+      }
+    }
+  </script>
+</body>
+</html>

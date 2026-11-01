@@ -26,20 +26,20 @@ pub fn render(f: &mut Frame, app: &App) {
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let relay_status_span = if app.embedded_relay.is_some() {
         Span::styled(
-            format!(" [● RELAY: ACTIVE :{:?}] ", app.relay_port),
+            format!(" [RELAY: ACTIVE :{:?}] ", app.relay_port),
             Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD),
         )
     } else {
         Span::styled(
-            " [○ RELAY: OFF] ",
+            " [RELAY: OFF] ",
             Style::default().fg(Color::DarkGray).bg(Color::Black),
         )
     };
 
     let net_mode_span = if app.public_relays_active {
-        Span::styled(" [🌐 INTERNET ACTIVE] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
+        Span::styled(" [NET: ONLINE] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
     } else {
-        Span::styled(" [🔒 INTRANET ONLY] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        Span::styled(" [NET: INTRANET] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
     };
 
     let peers_count = app.discovered_peers.len();
@@ -59,7 +59,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let header_line = Line::from(vec![
-        Span::styled(" ⚡ DEADAIR ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(" DEADAIR ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(format!(" [{}] ", app.identity.name), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         Span::styled(format!("(ID: {}) ", app.identity.short_npub), Style::default().fg(Color::Magenta)),
         relay_status_span,
@@ -127,7 +127,7 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
         let (author_str, author_color) = if is_self {
             (format!("YOU [{}]", display_name), Color::Green)
         } else {
-            (format!("◈ {}", display_name), Color::Yellow)
+            (format!("* {}", display_name), Color::Yellow)
         };
 
         let time_str = format_timestamp(event.created_at.as_secs());
@@ -141,7 +141,7 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
         let mut lines = vec![header];
         for line in event.content.lines() {
             lines.push(Line::from(vec![
-                Span::styled("  │ ", Style::default().fg(Color::DarkGray)),
+                Span::styled("  | ", Style::default().fg(Color::DarkGray)),
                 Span::styled(line.to_string(), Style::default().fg(Color::White)),
             ]));
         }
@@ -182,9 +182,9 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     } else {
         for st in &app.relay_statuses {
             let (status_icon, color) = if st.connected {
-                ("●", Color::Green)
+                ("[+]", Color::Green)
             } else {
-                ("○", Color::Red)
+                ("[-]", Color::Red)
             };
             let latency_text = match st.latency_ms {
                 Some(ms) => format!(" ({}ms)", ms),
@@ -206,7 +206,7 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     } else {
         for peer in &app.discovered_peers {
             relay_lines.push(Line::from(vec![
-                Span::styled(" 📡 ", Style::default().fg(Color::Yellow)),
+                Span::styled(" LAN: ", Style::default().fg(Color::Yellow)),
                 Span::styled(format!("{}:{} ", peer.ip, peer.relay_port), Style::default().fg(Color::White)),
                 Span::styled(format!("[{}]", peer.name), Style::default().fg(Color::DarkGray)),
             ]));
@@ -255,9 +255,9 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_input(f: &mut Frame, app: &App, area: Rect) {
     let (border_color, prompt_prefix) = if app.input_mode == InputMode::Editing {
-        (Color::Yellow, " ✏  ")
+        (Color::Yellow, " >> ")
     } else {
-        (Color::DarkGray, " > ")
+        (Color::DarkGray, " >  ")
     };
 
     let title = if app.input_mode == InputMode::Editing {
@@ -272,7 +272,7 @@ fn render_input(f: &mut Frame, app: &App, area: Rect) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
 
-    let cursor = if app.input_mode == InputMode::Editing { "█" } else { "" };
+    let cursor = if app.input_mode == InputMode::Editing { "_" } else { "" };
     let input_text = format!("{}{}{}", prompt_prefix, app.input_buffer, cursor);
     let paragraph = Paragraph::new(input_text).block(block);
     f.render_widget(paragraph, area);
@@ -281,7 +281,7 @@ fn render_input(f: &mut Frame, app: &App, area: Rect) {
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let footer_text = if let Some((msg, _)) = &app.status_toast {
         Line::from(vec![
-            Span::styled(" ⚡ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" * ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::styled(msg.clone(), Style::default().fg(Color::White)),
         ])
     } else {
