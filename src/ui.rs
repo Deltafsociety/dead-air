@@ -83,7 +83,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
 fn render_body(f: &mut Frame, app: &App, area: Rect) {
     let body_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .constraints([Constraint::Percentage(68), Constraint::Percentage(32)])
         .split(area);
 
     render_timeline(f, app, body_chunks[0]);
@@ -108,7 +108,8 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
         let empty_msg = Paragraph::new(vec![
             Line::from(""),
             Line::from(Span::styled("No transmissions yet.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("Type a note below and hit [Enter] to broadcast. Type /name <nick> to change name.", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("Type a note below and hit [Enter] to broadcast.", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("Type /share to see your domestic address for friends.", Style::default().fg(Color::DarkGray))),
         ])
         .alignment(Alignment::Center)
         .block(block);
@@ -166,11 +167,11 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
 fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     let side_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+        .constraints([Constraint::Percentage(52), Constraint::Percentage(48)])
         .split(area);
 
     let relays_block = Block::default()
-        .title(" Relays & Intranet Nodes ")
+        .title(" Relays and Intranet Nodes ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Blue));
@@ -217,7 +218,7 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(relays_widget, side_chunks[0]);
 
     let info_block = Block::default()
-        .title(" Station Specs ")
+        .title(" Domestic Station Specs ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray));
@@ -228,14 +229,24 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
         Span::styled("Disabled ([p] to connect)", Style::default().fg(Color::DarkGray))
     };
 
+    let bookmarks_count = app.bookmarks.list().len();
+
     let info_lines = vec![
         Line::from(vec![
             Span::styled("Handle: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(app.identity.name.clone(), Style::default().fg(Color::Yellow)),
+            Span::styled(app.identity.name.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
-            Span::styled("Npub: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(app.identity.short_npub.clone(), Style::default().fg(Color::Magenta)),
+            Span::styled("Share Address: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(app.share_address.clone(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::styled("Detected IP: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(app.detected_ip.clone(), Style::default().fg(Color::Cyan)),
+        ]),
+        Line::from(vec![
+            Span::styled("Bookmarks: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{} saved ([b] connect)", bookmarks_count), Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
             Span::styled("Internet Mesh: ", Style::default().fg(Color::DarkGray)),
@@ -246,7 +257,7 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(format!("{} pending", app.outbox.len()), Style::default().fg(Color::Yellow)),
         ]),
         Line::from(""),
-        Line::from(Span::styled("Commands: /name <nick> | /relay add <url>", Style::default().fg(Color::Cyan))),
+        Line::from(Span::styled("Commands: /share | /bookmark add <url> [name]", Style::default().fg(Color::Cyan))),
     ];
 
     let info_widget = Paragraph::new(info_lines).block(info_block);
@@ -261,7 +272,7 @@ fn render_input(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let title = if app.input_mode == InputMode::Editing {
-        " Broadcasting (Enter to transmit, /name to set handle, Esc for nav) "
+        " Broadcasting (Enter to transmit, /share for address, Esc for nav) "
     } else {
         " Note Buffer (Press [i] or [Enter] to write) "
     };
@@ -288,12 +299,14 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled(" [i/Enter]", Style::default().fg(Color::Cyan)),
             Span::styled(" Write  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[s]", Style::default().fg(Color::Cyan)),
+            Span::styled(" Share Address  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[b]", Style::default().fg(Color::Cyan)),
+            Span::styled(" Connect Bookmarks  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[r]", Style::default().fg(Color::Cyan)),
             Span::styled(" Toggle Relay  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[p]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Public Internet Relays  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[c]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Clear  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Public Relays  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[q]", Style::default().fg(Color::Cyan)),
             Span::styled(" Quit", Style::default().fg(Color::DarkGray)),
         ])

@@ -1,7 +1,9 @@
 mod app;
+mod bookmarks;
 mod client;
 mod discovery;
 mod identity;
+mod net_info;
 mod outbox;
 mod relay;
 mod ui;

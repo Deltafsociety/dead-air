@@ -7,9 +7,11 @@ use nostr::nips::nip01::Metadata;
 use nostr::prelude::*;
 use tokio::sync::mpsc;
 
+use crate::bookmarks::BookmarkManager;
 use crate::client::{ClientPool, RelayStatus};
 use crate::discovery::{DiscoveryManager, PeerNode};
 use crate::identity::Identity;
+use crate::net_info;
 use crate::outbox::Outbox;
 use crate::relay::{EmbeddedRelay, RelayStore};
 
@@ -33,6 +35,9 @@ pub struct App {
     pub client_pool: ClientPool,
     pub _discovery: Arc<DiscoveryManager>,
     pub outbox: Outbox,
+    pub bookmarks: BookmarkManager,
+    pub detected_ip: String,
+    pub share_address: String,
     pub timeline: Vec<Event>,
     pub profiles: HashMap<PublicKey, String>,
     pub discovered_peers: Vec<PeerNode>,
@@ -45,6 +50,8 @@ pub struct App {
     inbound_event_tx: mpsc::UnboundedSender<Event>,
     inbound_event_rx: mpsc::UnboundedReceiver<Event>,
     peer_rx: mpsc::UnboundedReceiver<PeerNode>,
+    ip_rx: mpsc::UnboundedReceiver<(String, String)>,
+    ip_tx: mpsc::UnboundedSender<(String, String)>,
 }
 
 impl App {
@@ -54,6 +61,7 @@ impl App {
 
         let (inbound_event_tx, inbound_event_rx) = mpsc::unbounded_channel::<Event>();
         let (peer_tx, peer_rx) = mpsc::unbounded_channel::<PeerNode>();
+        let (ip_tx, ip_rx) = mpsc::unbounded_channel::<(String, String)>();
 
         let client_pool = ClientPool::new(inbound_event_tx.clone());
         let discovery = Arc::new(DiscoveryManager::new(peer_tx));
@@ -65,6 +73,7 @@ impl App {
         );
 
         let outbox = Outbox::new();
+        let bookmarks = BookmarkManager::load();
 
         let (embedded_relay, relay_store) = match EmbeddedRelay::start(relay_port, inbound_event_tx.clone()).await {
             Ok((relay, store)) => {
@@ -74,8 +83,21 @@ impl App {
             Err(_) => (None, None),
         };
 
+        for url in bookmarks.auto_connect_urls() {
+            client_pool.add_relay(url);
+        }
+
         let mut profiles = HashMap::new();
         profiles.insert(identity.keys.public_key(), identity.name.clone());
+
+        let initial_ip = "detecting...".to_string();
+        let initial_share = format!("ws://127.0.0.1:{}", relay_port);
+
+        let ip_tx_spawn = ip_tx.clone();
+        tokio::spawn(async move {
+            let res = net_info::resolve_best_address(relay_port).await;
+            let _ = ip_tx_spawn.send(res);
+        });
 
         let mut app = Self {
             identity,
@@ -85,6 +107,9 @@ impl App {
             client_pool,
             _discovery: discovery,
             outbox,
+            bookmarks,
+            detected_ip: initial_ip,
+            share_address: initial_share,
             timeline: Vec::new(),
             profiles,
             discovered_peers: Vec::new(),
@@ -97,6 +122,8 @@ impl App {
             inbound_event_tx,
             inbound_event_rx,
             peer_rx,
+            ip_rx,
+            ip_tx,
         };
 
         app.broadcast_metadata().await;
@@ -106,6 +133,15 @@ impl App {
     }
 
     pub async fn tick(&mut self) {
+        while let Ok((ip, share_url)) = self.ip_rx.try_recv() {
+            self.detected_ip = ip;
+            self.share_address = share_url;
+            self.status_toast = Some((
+                format!("Detected domestic address: {}", self.share_address),
+                Instant::now(),
+            ));
+        }
+
         while let Ok(event) = self.inbound_event_rx.try_recv() {
             if event.kind == Kind::Metadata {
                 if let Ok(meta) = Metadata::from_json(&event.content) {
@@ -155,6 +191,8 @@ impl App {
                 KeyCode::Char('i') | KeyCode::Enter => self.input_mode = InputMode::Editing,
                 KeyCode::Char('r') | KeyCode::F(2) => self.toggle_relay().await,
                 KeyCode::Char('p') => self.toggle_public_relays().await,
+                KeyCode::Char('b') => self.connect_bookmarks().await,
+                KeyCode::Char('s') => self.show_share_toast(),
                 KeyCode::Char('c') => {
                     self.timeline.clear();
                     self.status_toast = Some(("Feed cleared".to_string(), Instant::now()));
@@ -225,21 +263,74 @@ impl App {
                     self.status_toast = Some((format!("Station name set to '{}'", name), Instant::now()));
                 }
             }
+            ["/share"] => {
+                self.show_share_toast();
+            }
+            ["/ip"] => {
+                let ip_tx_spawn = self.ip_tx.clone();
+                let port = self.relay_port;
+                tokio::spawn(async move {
+                    let res = net_info::resolve_best_address(port).await;
+                    let _ = ip_tx_spawn.send(res);
+                });
+                self.status_toast = Some(("Detecting domestic network address...".to_string(), Instant::now()));
+            }
+            ["/bookmark", "add", url] => {
+                let name = format!("node-{}", &url[url.len().saturating_sub(6)..]);
+                self.bookmarks.add(url.to_string(), name);
+                self.client_pool.add_relay(url.to_string());
+                self.status_toast = Some((format!("Added bookmark {}", url), Instant::now()));
+            }
+            ["/bookmark", "add", url, name] => {
+                self.bookmarks.add(url.to_string(), name.to_string());
+                self.client_pool.add_relay(url.to_string());
+                self.status_toast = Some((format!("Added bookmark {} [{}]", url, name), Instant::now()));
+            }
+            ["/bookmark", "remove", key] => {
+                if self.bookmarks.remove(key) {
+                    self.status_toast = Some((format!("Removed bookmark {}", key), Instant::now()));
+                } else {
+                    self.status_toast = Some((format!("Bookmark not found: {}", key), Instant::now()));
+                }
+            }
+            ["/bookmark", "connect"] => {
+                self.connect_bookmarks().await;
+            }
             ["/relay", "add", url] => {
                 let relay_url = url.to_string();
                 self.client_pool.add_relay(relay_url.clone());
-                self.status_toast = Some((format!("Added relay {}", relay_url), Instant::now()));
+                self.bookmarks.add(relay_url.clone(), "manual-node".to_string());
+                self.status_toast = Some((format!("Added and bookmarked relay {}", relay_url), Instant::now()));
             }
             ["/relay", "public"] => {
                 self.toggle_public_relays().await;
             }
             ["/help"] => {
-                self.status_toast = Some(("Commands: /name <nick> | /relay add <url> | /relay public".to_string(), Instant::now()));
+                self.status_toast = Some(("Commands: /share | /name <nick> | /bookmark add <url> [name] | /relay public".to_string(), Instant::now()));
             }
             _ => {
                 self.status_toast = Some(("Unknown command. Type /help".to_string(), Instant::now()));
             }
         }
+    }
+
+    pub fn show_share_toast(&mut self) {
+        self.status_toast = Some((
+            format!("Share with peers: {} [{}]", self.share_address, self.identity.name),
+            Instant::now(),
+        ));
+    }
+
+    pub async fn connect_bookmarks(&mut self) {
+        let urls = self.bookmarks.auto_connect_urls();
+        let count = urls.len();
+        for url in urls {
+            self.client_pool.add_relay(url);
+        }
+        self.status_toast = Some((
+            format!("Connecting to {} domestic bookmarked relays", count),
+            Instant::now(),
+        ));
     }
 
     pub async fn toggle_public_relays(&mut self) {
