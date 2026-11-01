@@ -91,7 +91,10 @@ async fn relay_worker(
 
                 let sub_req = ClientMessage::req(
                     SubscriptionId::new("feed"),
-                    vec![Filter::new().kind(Kind::TextNote).limit(200)],
+                    vec![
+                        Filter::new().kind(Kind::TextNote).limit(200),
+                        Filter::new().kind(Kind::Metadata).limit(200),
+                    ],
                 );
                 let _ = ws_sender.send(Message::text(sub_req.as_json())).await;
 

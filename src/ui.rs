@@ -36,6 +36,12 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         )
     };
 
+    let net_mode_span = if app.public_relays_active {
+        Span::styled(" [🌐 INTERNET ACTIVE] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled(" [🔒 INTRANET ONLY] ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+    };
+
     let peers_count = app.discovered_peers.len();
     let peers_span = Span::styled(
         format!(" [PEERS: {}] ", peers_count),
@@ -54,9 +60,11 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
 
     let header_line = Line::from(vec![
         Span::styled(" ⚡ DEADAIR ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw(" Intranet & Offline Nostr Station "),
+        Span::styled(format!(" [{}] ", app.identity.name), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         Span::styled(format!("(ID: {}) ", app.identity.short_npub), Style::default().fg(Color::Magenta)),
         relay_status_span,
+        Span::raw(" "),
+        net_mode_span,
         Span::raw(" "),
         peers_span,
         Span::raw(" "),
@@ -100,7 +108,7 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
         let empty_msg = Paragraph::new(vec![
             Line::from(""),
             Line::from(Span::styled("No transmissions yet.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("Type a note below and hit [Enter] to broadcast on the local intranet.", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("Type a note below and hit [Enter] to broadcast. Type /name <nick> to change name.", Style::default().fg(Color::DarkGray))),
         ])
         .alignment(Alignment::Center)
         .block(block);
@@ -111,17 +119,15 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
     let mut list_items = Vec::new();
     for event in app.timeline.iter() {
         let is_self = event.pubkey == app.identity.keys.public_key();
-        let author_str = if is_self {
-            format!("YOU ({})", app.identity.short_npub)
-        } else {
+        let display_name = app.profiles.get(&event.pubkey).cloned().unwrap_or_else(|| {
             let full_hex = event.pubkey.to_hex();
-            format!("◈ {}..{}", &full_hex[..6], &full_hex[full_hex.len() - 4..])
-        };
+            format!("{}..{}", &full_hex[..6], &full_hex[full_hex.len() - 4..])
+        });
 
-        let author_color = if is_self {
-            Color::Green
+        let (author_str, author_color) = if is_self {
+            (format!("YOU [{}]", display_name), Color::Green)
         } else {
-            Color::Yellow
+            (format!("◈ {}", display_name), Color::Yellow)
         };
 
         let time_str = format_timestamp(event.created_at.as_secs());
@@ -216,25 +222,31 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray));
 
+    let public_relays_status = if app.public_relays_active {
+        Span::styled("Connected (Damus, nos.lol)", Style::default().fg(Color::Green))
+    } else {
+        Span::styled("Disabled ([p] to connect)", Style::default().fg(Color::DarkGray))
+    };
+
     let info_lines = vec![
+        Line::from(vec![
+            Span::styled("Handle: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(app.identity.name.clone(), Style::default().fg(Color::Yellow)),
+        ]),
         Line::from(vec![
             Span::styled("Npub: ", Style::default().fg(Color::DarkGray)),
             Span::styled(app.identity.short_npub.clone(), Style::default().fg(Color::Magenta)),
         ]),
         Line::from(vec![
-            Span::styled("Relay Port: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}", app.relay_port), Style::default().fg(Color::White)),
-        ]),
-        Line::from(vec![
-            Span::styled("Protocol: ", Style::default().fg(Color::DarkGray)),
-            Span::styled("NIP-01 / NIP-45", Style::default().fg(Color::White)),
+            Span::styled("Internet Mesh: ", Style::default().fg(Color::DarkGray)),
+            public_relays_status,
         ]),
         Line::from(vec![
             Span::styled("Offline Outbox: ", Style::default().fg(Color::DarkGray)),
             Span::styled(format!("{} pending", app.outbox.len()), Style::default().fg(Color::Yellow)),
         ]),
         Line::from(""),
-        Line::from(Span::styled("Press [r] to toggle Relay", Style::default().fg(Color::Cyan))),
+        Line::from(Span::styled("Commands: /name <nick> | /relay add <url>", Style::default().fg(Color::Cyan))),
     ];
 
     let info_widget = Paragraph::new(info_lines).block(info_block);
@@ -249,7 +261,7 @@ fn render_input(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let title = if app.input_mode == InputMode::Editing {
-        " Broadcasting (Press Enter to transmit, Esc to cancel) "
+        " Broadcasting (Enter to transmit, /name to set handle, Esc for nav) "
     } else {
         " Note Buffer (Press [i] or [Enter] to write) "
     };
@@ -278,6 +290,8 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(" Write  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[r]", Style::default().fg(Color::Cyan)),
             Span::styled(" Toggle Relay  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[p]", Style::default().fg(Color::Cyan)),
+            Span::styled(" Public Internet Relays  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[c]", Style::default().fg(Color::Cyan)),
             Span::styled(" Clear  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[q]", Style::default().fg(Color::Cyan)),
