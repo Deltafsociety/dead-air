@@ -24,20 +24,9 @@ DEADAIR is built for that exact moment. It runs entirely inside your terminal, r
 
 ### Terminal Dashboard
 
-```
-DEADAIR  [Alice] (ID: npub1...) [RELAY: ACTIVE :4869]  [NET: INTRANET]  [PEERS: 2]  [OUTBOX: 0]
-+-- Local Timeline (12 events) -----------------------++-- Relays and Intranet Nodes ----------------+
-| [14:22:01] YOU [Alice] (id: 86be7ae9..)             || [+] ws://127.0.0.1:4869 (1ms)              |
-|   | Testing domestic broadcast during network cutoff|| [+] ws://5.234.12.80:4869 (14ms)           |
-|                                                     ||                                            |
-| [14:22:18] * Bob (id: 4f10d291..)                   || Discovered LAN Peers:                      |
-|   | Connected to your station from Isfahan.         ||  LAN: 192.168.1.142:4869 [Bob]             |
-+-----------------------------------------------------++--------------------------------------------+
-+-- Compose Broadcast Note [Kind 1] ----------------------------------------------------------------+
-|  >> Type your message or /command here..._                                                        |
-+---------------------------------------------------------------------------------------------------+
- [i/Enter] Write  [s] Share Address  [b] Bookmarks  [r] Toggle Relay  [p] Public Relays  [q] Quit
-```
+![DEADAIR Terminal Workflow Demo](docs/images/demo.gif)
+
+![DEADAIR Terminal Dashboard Screenshot](docs/images/dashboard.png)
 
 ---
 
