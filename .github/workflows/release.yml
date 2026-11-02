@@ -141,7 +141,7 @@ jobs:
             fi
           fi
 
-          pnpm dlx @tauri-apps/cli android build --apk --target aarch64,armv7 --ci
+          pnpm dlx @tauri-apps/cli android build --apk --target aarch64 --target armv7 --ci
 
           # Find highest version build-tools
           BUILD_TOOLS=$(find $ANDROID_HOME/build-tools -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)

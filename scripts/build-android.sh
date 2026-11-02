@@ -58,7 +58,7 @@ fi
 
 # Build APKs
 echo "[+] Compiling Android APKs (aarch64 + armv7)..."
-pnpm dlx @tauri-apps/cli android build --apk --target aarch64,armv7 --ci
+pnpm dlx @tauri-apps/cli android build --apk --target aarch64 --target armv7 --ci
 
 # Locate raw built APK
 RAW_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" 2>/dev/null | head -n 1 || true)
