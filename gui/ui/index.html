@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>DEADAIR // Intranet Nostr Station</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Header -->
+    <header class="station-header">
+      <div class="brand">
+        <span class="pulse-dot"></span>
+        <span class="logo">DEADAIR</span>
+        <span class="version">v0.1.4</span>
+      </div>
+
+      <div class="header-badges">
+        <button id="handle-badge" class="badge badge-handle" title="Click to rename station">
+          <span class="badge-label">NODE:</span>
+          <span id="handle-text">anon</span>
+        </button>
+
+        <button id="relay-pill" class="badge badge-relay active" title="Toggle embedded relay">
+          <span class="badge-label">RELAY:</span>
+          <span id="relay-text">ACTIVE :4869</span>
+        </button>
+
+        <button id="public-mesh-pill" class="badge badge-mesh" title="Toggle public internet relays">
+          <span class="badge-label">PUBLIC:</span>
+          <span id="public-mesh-text">OFF</span>
+        </button>
+
+        <div id="share-pill" class="badge badge-share" title="Click to copy connection address">
+          <span class="badge-label">SHARE:</span>
+          <span id="share-text">ws://127.0.0.1:4869</span>
+          <span class="copy-icon">📋</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button id="tab-station-btn" class="tab-btn active">
+        <span class="tab-num">[1]</span> DEADAIR Station
+        <span id="station-badge-count" class="tab-counter">0</span>
+      </button>
+      <button id="tab-public-btn" class="tab-btn">
+        <span class="tab-num">[2]</span> Public Mesh
+        <span id="public-badge-count" class="tab-counter">0</span>
+      </button>
+      <button id="sidebar-toggle-btn" class="tab-btn mobile-only">
+        <span class="tab-num">[3]</span> Nodes &amp; Relays
+      </button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-body">
+      <!-- Feed Section -->
+      <section class="feed-section">
+        <!-- Live status bar -->
+        <div class="stream-banner">
+          <div class="stream-status">
+            <span class="status-indicator"></span>
+            <span id="stream-label">LIVE STREAMING</span>
+          </div>
+          <div class="stream-actions">
+            <button id="resume-stream-btn" class="btn-micro" style="display: none;">Resume Stream</button>
+            <button id="clear-feed-btn" class="btn-micro">Clear Tab</button>
+          </div>
+        </div>
+
+        <!-- Notes Scroll List -->
+        <div id="notes-container" class="notes-container">
+          <!-- Dynamic post cards rendered here -->
+        </div>
+
+        <!-- Reply Context Banner -->
+        <div id="reply-banner" class="reply-banner" style="display: none;">
+          <span class="reply-icon">💬</span>
+          <span class="reply-text">Replying to <strong id="reply-target-name">@author</strong></span>
+          <button id="cancel-reply-btn" class="cancel-reply-btn" title="Cancel reply">&times;</button>
+        </div>
+
+        <!-- Composer Footer -->
+        <footer class="composer-footer">
+          <div class="composer-box">
+            <textarea id="note-input" placeholder="Broadcast message across intranet (or /help)..." rows="2"></textarea>
+            <button id="send-btn" class="btn-transmit">TRANSMIT</button>
+          </div>
+        </footer>
+      </section>
+
+      <!-- Sidebar -->
+      <aside id="station-sidebar" class="station-sidebar">
+        <!-- Station Identity -->
+        <div class="card sidebar-card">
+          <div class="card-header">Domestic Station Specs</div>
+          <div class="spec-row">
+            <span class="spec-label">Detected IP:</span>
+            <span id="spec-ip" class="spec-val">127.0.0.1</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Npub:</span>
+            <span id="spec-npub" class="spec-val-code">npub1...</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Outbox:</span>
+            <span id="spec-outbox" class="spec-val">0 pending</span>
+          </div>
+        </div>
+
+        <!-- LAN Discovered Peers -->
+        <div class="card sidebar-card">
+          <div class="card-header">
+            LAN Intranet Peers
+            <span id="peer-count" class="badge-mini">0</span>
+          </div>
+          <div id="peers-list" class="peers-list">
+            <div class="empty-state">No UDP peers discovered yet</div>
+          </div>
+        </div>
+
+        <!-- Connected Relays & Bookmarks -->
+        <div class="card sidebar-card">
+          <div class="card-header">
+            Relays &amp; Bookmarks
+            <span id="relay-count" class="badge-mini">0</span>
+          </div>
+          <div id="relays-list" class="relays-list">
+            <!-- Dynamic relay items -->
+          </div>
+          <div class="add-bookmark-form">
+            <input type="text" id="bm-url-input" placeholder="ws://192.168.1.X:4869">
+            <button id="add-bm-btn" class="btn-micro">Add</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Status Toast Notification -->
+    <div id="toast-notification" class="toast-notification"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

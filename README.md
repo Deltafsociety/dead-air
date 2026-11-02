@@ -64,24 +64,31 @@ Once installed, launch from any directory:
 deadair
 ```
 
-#### Pre-built Binaries
-Static standalone binaries are available on the [Releases page](https://github.com/deltafsociety/dead-air/releases):
-* Linux (x86_64)
-* Windows (x86_64)
-* macOS Apple Silicon (ARM64)
-* macOS Intel (x86_64)
+#### Pre-built Binaries & Mobile APK
+Static standalone releases are available on the [Releases page](https://github.com/deltafsociety/dead-air/releases):
+* **Android APK**: `deadair-android-arm64.apk` (~3–5 MB lightweight native app)
+* **Desktop GUI**: `deadair-gui-linux-x86_64.tar.gz`
+* **Terminal TUI**: Linux (x86_64), macOS (ARM64 / x86_64), Windows (x86_64)
 
 #### Building from Source
 ```bash
-# Direct install via Cargo (guarantees binary is tailored to your CPU)
-cargo install --git https://github.com/deltafsociety/dead-air.git
-
-# Or build from local clone
-git clone https://github.com/deltafsociety/dead-air.git
-cd dead-air
-cargo build --release
+# 1. Terminal TUI Station
+cargo build --release -p deadair
 ./target/release/deadair
+
+# 2. Native Desktop GUI (Tauri v2)
+cargo build --release -p deadair-gui
+./target/release/deadair-gui
+
+# 3. Lightweight Android APK
+./scripts/build-android.sh
 ```
+
+#### Connecting Existing Mobile Nostr Clients
+You can also connect any standard Nostr client (such as **Amethyst**, **Coracle**, or **Plebstr**) directly to your station:
+1. Open relay settings in your Android/iOS Nostr app.
+2. Add your station's domestic address: `ws://<your-lan-or-intranet-ip>:4869`.
+3. Your mobile client is now broadcasting and reading from your sovereign station without internet dependencies.
 
 ---
 

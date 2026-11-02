@@ -6,6 +6,20 @@ authors = ["deltafsociety"]
 description = "Offline-first intranet Nostr station for blackouts and domestic network partitions"
 repository = "https://github.com/deltafsociety/dead-air"
 
+[workspace]
+members = [
+    ".",
+    "gui/src-tauri"
+]
+
+[lib]
+name = "deadair"
+path = "src/lib.rs"
+
+[[bin]]
+name = "deadair"
+path = "src/main.rs"
+
 [dependencies]
 crossterm = "0.29.0"
 dirs = "7.0.0"

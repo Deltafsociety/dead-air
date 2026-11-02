@@ -67,9 +67,84 @@ jobs:
           name: ${{ matrix.archive_name }}
           path: ${{ matrix.archive_name }}
 
+  build-gui-desktop:
+    name: Build Desktop GUI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (WebKit2GTK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Desktop GUI binary
+        run: cargo build --release -p deadair-gui
+
+      - name: Package GUI binary
+        run: |
+          mkdir -p dist
+          cp target/release/deadair-gui dist/
+          tar -czvf deadair-gui-linux-x86_64.tar.gz -C dist deadair-gui
+
+      - name: Upload Desktop GUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadair-gui-linux-x86_64.tar.gz
+          path: deadair-gui-linux-x86_64.tar.gz
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;27.0.12077973"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+
+      - name: Install Rust & Android Target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Setup Node & pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Build Android APK
+        run: |
+          cd gui
+          pnpm dlx @tauri-apps/cli android init --ci
+          pnpm dlx @tauri-apps/cli android build --apk --target aarch64-linux-android
+          mkdir -p ../dist
+          cp $(find src-tauri/gen/android -name "*.apk" | grep -E "(release|universal)" | head -n 1) ../dist/deadair-android-arm64.apk
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadair-android-arm64.apk
+          path: dist/deadair-android-arm64.apk
+
   release:
     name: Publish Release
-    needs: build
+    needs: [build, build-gui-desktop, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:

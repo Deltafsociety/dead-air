@@ -1,0 +1,24 @@
+[package]
+name = "deadair-gui"
+version = "0.1.0"
+description = "DEADAIR GUI and Android Station"
+authors = ["deltafsociety"]
+edition = "2024"
+
+[lib]
+name = "deadair_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+deadair = { path = "../.." }
+nostr = { version = "0.45.5", features = ["os-rng", "rand"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.54.1", features = ["full"] }
+log = "0.4"
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-log = "2"

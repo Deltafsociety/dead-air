@@ -64,24 +64,31 @@ curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/insta
 deadair
 ```
 
-#### دریافت فایل‌های اجرایی آماده
-فایل‌های مستقل برای سیستم‌عامل‌ها در [صفحه انتشارها (Releases)](https://github.com/deltafsociety/dead-air/releases) موجود است:
-* لینوکس (معماری x86_64)
-* ویندوز (معماری x86_64)
-* مک اواس اپل سیلیکون (معماری ARM64)
-* مک اواس اینتل (معماری x86_64)
+#### دریافت فایل‌های اجرایی آماده و نرم‌افزار اندروید
+نسخه‌های رسمی در [صفحه انتشارها (Releases)](https://github.com/deltafsociety/dead-air/releases) در دسترس است:
+* **نرم‌افزار اندروید**: `deadair-android-arm64.apk` (اپلیکیشن بومی سبک ۳ الی ۵ مگابایتی)
+* **نسخه گرافیکی دسکتاپ**: `deadair-gui-linux-x86_64.tar.gz`
+* **نسخه ترمینال (TUI)**: لینوکس، مک اواس (Apple Silicon / Intel)، و ویندوز
 
 #### ساخت از روی سورس کد
 ```bash
-# نصب مستقیم با Cargo (تضمین سازگاری کامل با پردازنده دستگاه شما)
-cargo install --git https://github.com/deltafsociety/dead-air.git
-
-# یا ساخت دستی از روی کلون پروژه
-git clone https://github.com/deltafsociety/dead-air.git
-cd dead-air
-cargo build --release
+# ۱. نسخه ترمینال (TUI)
+cargo build --release -p deadair
 ./target/release/deadair
+
+# ۲. نسخه گرافیکی دسکتاپ (Tauri v2)
+cargo build --release -p deadair-gui
+./target/release/deadair-gui
+
+# ۳. فایل نصبی سبک اندروید (APK)
+./scripts/build-android.sh
 ```
+
+#### اتصال کلاینت‌های موجود نوستر روی موبایل
+شما همچنین می‌توانید هر کلاینت استاندارد نوستر (مانند **Amethyst**، **Coracle**، یا **Plebstr**) را مستقیما به ایستگاه DEADAIR متصل کنید:
+۱. در تنظیمات کلاینت موبایل خود، آدرس رله جدید اضافه کنید.
+۲. آدرس ایستگاه داخلی خود را وارد کنید: `ws://<your-lan-ip>:4869`.
+۳. اکنون موبایل شما بدون نیاز به اینترنت جهانی و مستقیما عضو شبکه ارتباطی ایستگاه است.
 
 ---
 
