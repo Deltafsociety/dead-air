@@ -584,7 +584,7 @@ body {
   to { transform: translateY(0); opacity: 1; }
 }
 
-/* Mobile Responsiveness (Android & Phones) */
+/* Compact & Responsive Window Layout */
 @media (max-width: 820px) {
   .header-badges {
     overflow-x: auto;

@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DEADAIR // Offline and Intranet Nostr Station</title>
+  <title>DEADAIR // Offline & Intranet Nostr Station</title>
+  <link rel="icon" type="image/png" href="images/icon.png">
   <style>
     :root {
       --bg: #f4f4ee;
@@ -24,12 +25,12 @@
       background-color: var(--bg);
       color: var(--fg);
       font-family: ui-monospace, "SF Mono", "Cascadia Code", "Courier New", monospace;
-      line-height: 1.5;
+      line-height: 1.6;
       padding: 24px;
     }
 
     .container {
-      max-width: 960px;
+      max-width: 980px;
       margin: 0 auto;
     }
 
@@ -46,19 +47,93 @@
       gap: 16px;
     }
 
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      border: 2px solid #0a0a0a;
+      box-shadow: 2px 2px 0 #0a0a0a;
+    }
+
     h1 {
       font-size: 2rem;
       letter-spacing: -1px;
       text-transform: uppercase;
+      line-height: 1.1;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg);
+      border: var(--border);
+      padding: 8px 14px;
+      font-family: inherit;
+      font-weight: bold;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: var(--fg);
+      cursor: pointer;
+      box-shadow: 3px 3px 0 #000;
+      transition: transform 0.1s, box-shadow 0.1s, background 0.1s;
+    }
+
+    .btn:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 4px 4px 0 #000;
+      background: var(--accent);
+    }
+
+    .btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 #000;
+    }
+
+    .btn-github {
+      background: #0a0a0a;
+      color: #fff;
+    }
+
+    .btn-github:hover {
+      background: #2a2a2a;
+      color: #00ffff;
+    }
+
+    .btn-donate {
+      background: #ffea00;
+    }
+
+    .btn-telegram {
+      background: #2ca5e0;
+      color: #fff;
+    }
+
+    .btn-telegram:hover {
+      background: #1b8ec5;
+      color: #fff;
     }
 
     .lang-switcher button {
       background: var(--bg);
       border: var(--border);
-      padding: 8px 16px;
+      padding: 8px 14px;
       font-family: inherit;
       font-weight: bold;
-      font-size: 1rem;
+      font-size: 0.9rem;
       cursor: pointer;
       box-shadow: 3px 3px 0 #000;
     }
@@ -78,25 +153,61 @@
     }
 
     .box-title {
-      display: inline-block;
-      background: var(--fg);
-      color: #fff;
-      padding: 4px 12px;
-      font-size: 0.9rem;
       font-weight: bold;
+      font-size: 1.25rem;
       text-transform: uppercase;
+      border-bottom: 2px solid #0a0a0a;
+      padding-bottom: 8px;
       margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
     }
 
     .highlight {
+      background: var(--accent);
+      padding: 2px 6px;
+      font-weight: bold;
+      border: 1px solid #000;
+    }
+
+    .highlight-alt {
       background: var(--accent-alt);
       padding: 2px 6px;
       font-weight: bold;
+      border: 1px solid #000;
+    }
+
+    .step-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .step-card {
+      border: 2px solid #0a0a0a;
+      background: #fdfdfc;
+      padding: 16px;
+      box-shadow: 3px 3px 0 #0a0a0a;
+    }
+
+    .step-number {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      line-height: 28px;
+      text-align: center;
+      background: #0a0a0a;
+      color: #fff;
+      font-weight: bold;
+      margin-bottom: 8px;
     }
 
     .download-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 16px;
       margin-top: 16px;
     }
@@ -104,29 +215,20 @@
     .download-card {
       border: var(--border);
       padding: 16px;
-      background: var(--bg);
+      background: #fbfbfa;
       text-decoration: none;
       color: inherit;
-      display: block;
-      box-shadow: 4px 4px 0 #000;
-      transition: transform 0.05s;
+      box-shadow: 3px 3px 0 #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: transform 0.1s, box-shadow 0.1s;
     }
 
     .download-card:hover {
-      background: var(--accent);
       transform: translate(-2px, -2px);
-      box-shadow: 6px 6px 0 #000;
-    }
-
-    .download-card strong {
-      display: block;
-      font-size: 1.1rem;
-      margin-bottom: 4px;
-    }
-
-    .download-card span {
-      font-size: 0.85rem;
-      color: #444;
+      box-shadow: 5px 5px 0 #0a0a0a;
+      background: var(--accent-alt);
     }
 
     table {
@@ -158,6 +260,19 @@
       border: var(--border);
     }
 
+    .diagram-box {
+      background: #0f141c;
+      color: #64ffda;
+      padding: 20px;
+      border: var(--border);
+      box-shadow: var(--shadow);
+      font-family: ui-monospace, monospace;
+      overflow-x: auto;
+      margin: 16px 0;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
     .persian-section {
       direction: rtl;
       font-family: Vazirmatn, Tahoma, sans-serif;
@@ -178,79 +293,155 @@
     }
 
     footer {
-      border-top: var(--border);
-      padding: 20px 0;
+      border: var(--border);
+      box-shadow: var(--shadow);
+      background: #fff;
+      padding: 24px;
       text-align: center;
-      font-size: 0.85rem;
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <div>
-        <h1>DEADAIR</h1>
-        <p>Offline and Intranet Nostr Station</p>
+      <div class="brand-group">
+        <img src="images/icon.png" alt="DEADAIR icon" class="brand-icon">
+        <div>
+          <h1>DEADAIR</h1>
+          <p>Offline &amp; Intranet Nostr Station</p>
+        </div>
       </div>
-      <div class="lang-switcher">
-        <button id="btn-en" class="active" onclick="setLang('en')">ENGLISH</button>
-        <button id="btn-fa" onclick="setLang('fa')">فارسی</button>
+      
+      <div class="top-actions">
+        <a class="btn btn-github" href="https://github.com/deltafsociety/dead-air" target="_blank" rel="noopener">
+          <span>★</span> GitHub
+        </a>
+        <a class="btn btn-donate" href="https://coindrop.to/delta" target="_blank" rel="noopener">
+          <span>☕</span> Donate
+        </a>
+        <a class="btn btn-telegram" href="https://t.me/LOW_SIGNAL73" target="_blank" rel="noopener">
+          <span>📢</span> Telegram
+        </a>
+        <div class="lang-switcher">
+          <button id="btn-en" class="active" onclick="setLang('en')">EN</button>
+          <button id="btn-fa" onclick="setLang('fa')">فا</button>
+        </div>
       </div>
     </header>
 
+    <!-- ===================================================================== -->
     <!-- ENGLISH CONTENT -->
+    <!-- ===================================================================== -->
     <main id="content-en">
       <div class="box">
-        <div class="box-title">System Overview</div>
+        <div class="box-title">
+          <span>What is DEADAIR?</span>
+          <span class="highlight">Offline-First</span>
+        </div>
         <p>
-          DEADAIR is a lightweight, zero-dependency terminal user interface (TUI) communication station built in Rust.
-          It is engineered specifically for <span class="highlight">digital blackouts</span>, local mesh networks, and 
-          <span class="highlight">national intranet cutoffs</span> where international internet traffic is severed.
+          <strong>DEADAIR</strong> is a free, open-source chat and broadcast app made to keep people communicating when the global internet is shut down or censored.
         </p>
         <p style="margin-top: 12px;">
-          It uses the decentralized Nostr protocol without requiring any paid servers, centralized accounts, or domain registries.
-          Your cryptographic identity is generated and stored locally on your machine.
+          When internet blackouts happen, apps like Telegram, Signal, WhatsApp, and Discord go dark because their servers are outside the country. 
+          However, <strong>local network connections still work</strong>: devices connected to the same Wi-Fi router or domestic network cables can still talk to each other.
+        </p>
+        <p style="margin-top: 12px;">
+          DEADAIR uses this surviving local infrastructure. Any computer running DEADAIR can act as a local station or message relay for your family, coworkers, or contacts across the city—with <strong>zero central servers, no phone numbers, and no paid hosting</strong>.
         </p>
       </div>
 
-      <div class="box">
-        <div class="box-title">Live Terminal Interface and Workflow</div>
-        <img src="images/demo.gif" alt="DEADAIR Terminal Workflow Demo" style="width: 100%; border: var(--border); box-shadow: var(--shadow); margin-top: 8px; display: block;">
-      </div>
+      <!-- HOW IT WORKS DOCUMENTATION SECTION -->
+      <div class="box" id="docs-en">
+        <div class="box-title">
+          <span>How It Works (System Guide)</span>
+          <a href="https://github.com/deltafsociety/dead-air/blob/master/docs/HOW_IT_WORKS.md" target="_blank" style="font-size: 0.85rem; text-decoration: none; color: #000;" class="highlight-alt">Read full markdown docs &rarr;</a>
+        </div>
+        
+        <p>DEADAIR is engineered with a simple concept: <strong>cut out the middleman server entirely</strong>.</p>
 
-      <div class="box">
-        <div class="box-title">National Intranet Architecture</div>
-        <p>
-          During nationwide network shutdowns (such as the National Information Network scenario in Iran), foreign servers 
-          hosted in Europe or the US are blocked, rendering standard communication apps useless. 
-          However, domestic routing between local ISPs and cities remains operational.
-        </p>
-        <ul style="margin-left: 20px; margin-top: 12px;">
-          <li><strong>Domestic IP Detection:</strong> Automatically discovers your routable network address. Hit <code>/share</code> or <code>[s]</code> to get your station address: <code>ws://&lt;your_ip&gt;:4869 [handle]</code>.</li>
-          <li><strong>Persistent Relay Bookmarks:</strong> Manage trusted domestic nodes across cities via <code>/bookmark add ws://&lt;peer_ip&gt;:4869 [name]</code>. Connect all saved relays instantly with <code>[b]</code>.</li>
-          <li><strong>Embedded Relay:</strong> Press <code>[r]</code> to start an internal WebSocket relay on <code>0.0.0.0:4869</code>. Other computers across Iran can connect directly to your domestic IP.</li>
-          <li><strong>Intranet UDP Discovery:</strong> On local Wi-Fi or LAN networks, DEADAIR discovers neighbor stations automatically on UDP port 48690.</li>
-          <li><strong>Offline Outbox:</strong> Notes drafted while completely disconnected are queued in local storage and broadcast automatically the instant a peer or relay connects.</li>
+        <div class="step-grid">
+          <div class="step-card">
+            <div class="step-number">1</div>
+            <strong>No Accounts Needed</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">Your cryptographic identity (a secp256k1 keypair) is created on your device on first launch. No phone number or email required.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">2</div>
+            <strong>Your PC is a Relay</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">Press <code>[r]</code> to start an internal WebSocket relay on port <code>4869</code>. Your computer can now host chat for others.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">3</div>
+            <strong>Local Wi-Fi Discovery</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">Stations on the same Wi-Fi or router find each other automatically via UDP beacons without typing any IP address.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">4</div>
+            <strong>Offline Outbox</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">Type messages even while totally disconnected. DEADAIR saves them and sends them the second you connect to any peer.</p>
+          </div>
+        </div>
+
+        <div class="diagram-box">
+┌────────────────────────────────────────────────────────────────────────┐
+│                        HOW DEADAIR TRANSMITS DATA                      │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   [Your Device] ──── (Wi-Fi / LAN: UDP 48690) ───► [Nearby Neighbor]   │
+│         │                                         (Auto-Discovered)    │
+│         │                                                              │
+│         ▼ (Press [r] - Port 4869)                                      │
+│   [Your Embedded Relay] ◄─── (Domestic IP) ───► [Friend Across City]   │
+│                                                (Intranet Connection)   │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+        </div>
+
+        <h3 style="margin-top: 16px; font-size: 1.05rem;">Real-World Scenarios:</h3>
+        <ul style="margin-left: 20px; margin-top: 8px;">
+          <li><strong>In an office or apartment building:</strong> Connect to the local Wi-Fi. Run DEADAIR. Everyone on that network sees each other automatically.</li>
+          <li><strong>Between friends across the city:</strong> One friend presses <code>[r]</code> to turn on their relay, presses <code>[s]</code> to get their domestic IP address (e.g. <code>ws://5.x.x.x:4869 [Alice]</code>), and texts it to friends. Others run <code>/bookmark add ws://5.x.x.x:4869 Alice</code> and start chatting.</li>
         </ul>
       </div>
 
       <div class="box">
-        <div class="box-title">One-Line Install (Linux and macOS)</div>
-        <p>Run the following command in your terminal to install and launch deadair from anywhere:</p>
-        <pre>curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash</pre>
+        <div class="box-title">Live Terminal &amp; GUI Demo</div>
+        <img src="images/demo.gif" alt="DEADAIR Terminal Workflow Demo" style="width: 100%; border: var(--border); box-shadow: var(--shadow); margin-top: 8px; display: block;">
       </div>
 
       <div class="box">
-        <div class="box-title">Pre-built Binaries &amp; Mobile APK</div>
-        <p>Download standalone static binaries or lightweight Android app. No external runtime dependencies needed.</p>
+        <div class="box-title">
+          <span>Automatic Source Installer</span>
+          <span class="highlight">Recommended</span>
+        </div>
+        <p>The installer automatically installs any missing dependencies (C compiler, Rust, Git) and compiles DEADAIR natively for your machine. You can choose to install the <strong>Terminal TUI</strong> (command: <code>deadair</code>), the <strong>Desktop GUI</strong> (added to your Application Menu), or <strong>Both</strong>.</p>
+        
+        <p style="margin-top: 14px;"><strong>Linux &amp; macOS (Bash):</strong></p>
+        <pre>curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash</pre>
+
+        <p style="margin-top: 14px;"><strong>Windows (PowerShell):</strong></p>
+        <pre>irm https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.ps1 | iex</pre>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Pre-built Standalone Binaries</div>
+        <p>Download pre-compiled static releases if you don't wish to compile from source:</p>
         <div class="download-grid">
-          <a class="download-card" style="border: 3px solid #ff0055;" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-android-arm64.apk">
-            <strong>Android Mobile</strong>
-            <span>ARM64 APK (~3-5 MB)</span>
-          </a>
           <a class="download-card" style="border: 3px solid #00ffff;" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-gui-linux-x86_64.tar.gz">
             <strong>Desktop GUI</strong>
-            <span>Linux x86_64 (Tauri v2)</span>
+            <span>Linux x86_64 (App Menu Icon)</span>
           </a>
           <a class="download-card" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-linux-x86_64.tar.gz">
             <strong>Linux TUI</strong>
@@ -262,76 +453,64 @@
           </a>
           <a class="download-card" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-macos-arm64.tar.gz">
             <strong>macOS Apple Silicon</strong>
-            <span>M1/M2/M3/M4 (.tar.gz)</span>
+            <span>M1 / M2 / M3 / M4</span>
           </a>
           <a class="download-card" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-macos-x86_64.tar.gz">
             <strong>macOS Intel</strong>
-            <span>x86_64 (.tar.gz)</span>
+            <span>x86_64</span>
           </a>
         </div>
       </div>
 
       <div class="box">
-        <div class="box-title">Commands Reference</div>
+        <div class="box-title">Commands &amp; Shortcuts Reference</div>
         <table>
           <thead>
             <tr>
               <th>Command</th>
-              <th>Description</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
             <tr>
+              <td><code>/name &lt;nick&gt;</code></td>
+              <td>Set your display handle and publish your profile.</td>
+            </tr>
+            <tr>
               <td><code>/share</code></td>
-              <td>Display your domestic address and handle for sharing with peers.</td>
+              <td>Display your domestic connection address to share with friends.</td>
             </tr>
             <tr>
               <td><code>/ip</code></td>
-              <td>Re-run domestic network IP address detection.</td>
-            </tr>
-            <tr>
-              <td><code>/name &lt;handle&gt;</code></td>
-              <td>Set your station handle and broadcast a signed metadata event to all relays.</td>
+              <td>Re-detect domestic IP address.</td>
             </tr>
             <tr>
               <td><code>/bookmark add &lt;url&gt; [name]</code></td>
-              <td>Bookmark a domestic relay and connect.</td>
+              <td>Save a peer's station and connect to it.</td>
             </tr>
             <tr>
               <td><code>/bookmark remove &lt;key&gt;</code></td>
-              <td>Remove a relay from domestic bookmarks.</td>
+              <td>Remove a relay from saved bookmarks.</td>
             </tr>
             <tr>
               <td><code>/bookmark connect</code></td>
-              <td>Reconnect to all saved domestic relay bookmarks.</td>
-            </tr>
-            <tr>
-              <td><code>/relay add &lt;url&gt;</code></td>
-              <td>Connect to an intranet or internet relay (and auto-bookmark).</td>
-            </tr>
-            <tr>
-              <td><code>/relay public</code></td>
-              <td>Toggle connection to global public relays (Damus, nos.lol, Primal).</td>
-            </tr>
-            <tr>
-              <td><code>/tab [station|public]</code></td>
-              <td>Switch between DEADAIR Station chat and Public Social Mesh tabs.</td>
+              <td>Reconnect to all saved stations.</td>
             </tr>
             <tr>
               <td><code>/like</code></td>
-              <td>Like (❤️ Nostr Kind 7 reaction) the currently selected note in the public feed.</td>
+              <td>Like (❤️ Nostr reaction) the selected note.</td>
             </tr>
             <tr>
               <td><code>/reply &lt;msg&gt;</code></td>
-              <td>Send a threaded reply (Kind 1 with 'e' &amp; 'p' tags) to the selected note.</td>
+              <td>Send a threaded reply to the selected note.</td>
             </tr>
             <tr>
               <td><code>/clear</code></td>
-              <td>Clear messages in active timeline tab.</td>
+              <td>Clear local timeline screen.</td>
             </tr>
             <tr>
               <td><code>/help</code></td>
-              <td>Show available command summary.</td>
+              <td>Show available commands.</td>
             </tr>
           </tbody>
         </table>
@@ -345,199 +524,224 @@
           </thead>
           <tbody>
             <tr>
-              <td><code>Tab</code> or <code>t</code></td>
-              <td>Switch between DEADAIR Station and Public Social Mesh tabs.</td>
-            </tr>
-            <tr>
-              <td><code>1</code> or <code>2</code></td>
-              <td>Jump directly to Station tab (1) or Public Mesh tab (2).</td>
-            </tr>
-            <tr>
               <td><code>j</code> / <code>Down</code></td>
-              <td>Browse newer posts in Public feed (pauses live stream).</td>
+              <td>Browse newer posts (pauses live stream).</td>
             </tr>
             <tr>
               <td><code>k</code> / <code>Up</code></td>
-              <td>Browse older posts in Public feed (pauses live stream).</td>
+              <td>Browse older posts (pauses live stream).</td>
             </tr>
             <tr>
-              <td><code>g</code> or <code>Home</code></td>
-              <td>Resume live streaming feed in Public tab.</td>
+              <td><code>g</code> / <code>Home</code></td>
+              <td>Resume live stream feed.</td>
             </tr>
             <tr>
-              <td><code>l</code> or <code>L</code></td>
-              <td>Like (❤️ Kind 7 reaction) the selected public note.</td>
+              <td><code>l</code> / <code>L</code></td>
+              <td>Like (❤️) selected post.</td>
             </tr>
             <tr>
-              <td><code>r</code> (Public tab)</td>
-              <td>Reply (💬 threaded Kind 1 note) to the selected public post.</td>
+              <td><code>r</code></td>
+              <td>Reply (💬) to selected post.</td>
             </tr>
             <tr>
-              <td><code>r</code> or <code>F2</code> (Station tab)</td>
-              <td>Toggle embedded relay on or off (port 4869).</td>
+              <td><code>R</code> / <code>F2</code></td>
+              <td>Toggle local relay on/off (port 4869).</td>
             </tr>
             <tr>
-              <td><code>p</code></td>
-              <td>Toggle public internet relays.</td>
+              <td><code>i</code> / <code>Enter</code></td>
+              <td>Enter compose mode to type a message.</td>
             </tr>
             <tr>
-              <td><code>c</code></td>
-              <td>Clear local timeline screen.</td>
+              <td><code>Esc</code></td>
+              <td>Exit compose mode.</td>
             </tr>
             <tr>
-              <td><code>q</code></td>
+              <td><code>s</code></td>
+              <td>Display your shareable domestic address.</td>
+            </tr>
+            <tr>
+              <td><code>b</code></td>
+              <td>Reconnect all saved bookmarks.</td>
+            </tr>
+            <tr>
+              <td><code>q</code> / <code>Ctrl+C</code></td>
               <td>Quit DEADAIR.</td>
             </tr>
           </tbody>
         </table>
       </div>
-
-      <div class="box">
-        <div class="box-title">Quick Start</div>
-        <pre># Direct install via Cargo
-cargo install --git https://github.com/deltafsociety/dead-air.git
-
-# Or build from source
-git clone https://github.com/deltafsociety/dead-air.git
-cd dead-air
-cargo build --release
-./target/release/deadair</pre>
-      </div>
     </main>
 
+    <!-- ===================================================================== -->
     <!-- PERSIAN CONTENT -->
+    <!-- ===================================================================== -->
     <main id="content-fa" class="persian-section hidden">
       <div class="box">
-        <div class="box-title">معرفی سامانه</div>
+        <div class="box-title">
+          <span>نرم‌افزار DEADAIR چیست؟</span>
+          <span class="highlight">آفلاین و مستقل</span>
+        </div>
         <p>
-          نرم‌افزار DEADAIR یک ابزار ارتباطی ترمینال متنی (TUI) سبک و بدون وابستگی است که با زبان راست (Rust) توسعه داده شده است.
-          این سامانه منحصرا برای شرایط <span class="highlight">قطع کامل اینترنت</span>، شبکه‌های محلی (مش) و 
-          <span class="highlight">محدودیت به شبکه ملی اطلاعات (اینترانت)</span> طراحی شده است.
+          <strong>DEADAIR</strong> یک نرم‌افزار آزاد و متن‌باز برای چت و مخابره پیام در شرایط <strong>قطع کامل اینترنت و فیلترینگ شدید</strong> است.
         </p>
         <p style="margin-top: 12px;">
-          این ابزار از پروتکل غیرمتمرکز نوستر (Nostr) استفاده می‌کند و هیچ‌گونه وابستگی به سرورهای پولی، ثبت‌نام، شماره تماس، ایمیل یا دامنه‌های اینترنتی ندارد.
-          کلیدهای رمزنگاری شما به صورت محلی روی دستگاه خودتان ایجاد و ذخیره می‌شوند.
+          هنگامی که اینترنت جهانی قطع می‌شود، برنامه‌هایی مانند تلگرام، سیگنال و واتس‌اپ متوقف می‌شوند زیرا سرورهای آن‌ها در خارج از کشور قرار دارند. 
+          با این حال، <strong>ارتباطات محلی و داخلی همچنان فعال است</strong>: دستگاه‌هایی که به یک وای‌فای مشترک یا شبکه اینترانت داخلی متصل هستند می‌توانند مستقیماً با یکدیگر تبادل داده کنند.
+        </p>
+        <p style="margin-top: 12px;">
+          برنامه DEADAIR دقیقاً از همین ظرفیت استفاده می‌کند. هر لپ‌تاپ یا رایانه با اجرای این برنامه می‌تواند بدون نیاز به سرورهای پولی، بدون شماره تلفن و بدون وابستگی، به یک ایستگاه پیام‌رسان برای خانه، محل کار یا دوستان در شهرهای دیگر تبدیل شود.
         </p>
       </div>
 
-      <div class="box">
-        <div class="box-title">نمای زنده خط فرمان و جریان کار</div>
-        <img src="images/demo.gif" alt="پیش‌نمایش متحرک جریان کار" style="width: 100%; border: var(--border); box-shadow: var(--shadow); margin-top: 8px; display: block;">
-      </div>
+      <!-- PERSIAN HOW IT WORKS -->
+      <div class="box" id="docs-fa">
+        <div class="box-title">
+          <span>نحوه کارکرد (راهنمای گام‌به‌گام)</span>
+          <a href="https://github.com/deltafsociety/dead-air/blob/master/docs/HOW_IT_WORKS.md" target="_blank" style="font-size: 0.85rem; text-decoration: none; color: #000;" class="highlight-alt">مشاهده مستندات فنی در گیت‌هاب &larr;</a>
+        </div>
 
-      <div class="box">
-        <div class="box-title">عملکرد در شرایط اینترانت ملی</div>
-        <p>
-          هنگامی که دسترسی به اینترنت بین‌الملل قطع می‌شود، سرورهای خارجی از دسترس خارج شده و پیام‌رسان‌های معمولی متوقف می‌شوند.
-          با این حال، ارتباطات داخلی بین ارائه‌دهندگان اینترنت داخلی و شهرهای مختلف برقرار باقی می‌ماند.
-        </p>
-        <ul style="margin-right: 20px; margin-top: 12px;">
-          <li><strong>تشخیص خودکار IP داخلی:</strong> سامانه آدرس قابل اتصال شما را پیدا می‌کند. با کلید <code>[s]</code> یا دستور <code>/share</code> مشخصات ایستگاه را برای دیگران بفرستید: <code>ws://&lt;ip&gt;:4869 [نام]</code>.</li>
-          <li><strong>مدیریت نشانک‌های رله‌های داخلی:</strong> ذخیره و سازماندهی رله‌های سراسر کشور با دستور <code>/bookmark add ws://&lt;ip&gt;:4869 [نام]</code>. اتصال همزمان با کلید <code>[b]</code>.</li>
-          <li><strong>رله داخلی تعبیه‌شده:</strong> با کلید <code>[r]</code> سرور رله خود را روی پورت 4869 فعال کنید تا افراد در شهرهای دیگر به شما متصل شوند.</li>
-          <li><strong>کشف خودکار در شبکه محلی:</strong> دستگاه‌ها روی وای‌فای یا LAN از طریق پورت UDP 48690 یکدیگر را به شکل خودکار پیدا می‌کنند.</li>
-          <li><strong>صندوق پیام‌های آفلاین:</strong> پیام‌های نوشته‌شده در زمان قطعی کامل در سیستم ذخیره شده و پس از اولین اتصال ارسال می‌شوند.</li>
+        <p>ایده DEADAIR بسیار سرراست است: <strong>حذف کامل سرورها و شرکت‌های واسط</strong>.</p>
+
+        <div class="step-grid">
+          <div class="step-card">
+            <div class="step-number">۱</div>
+            <strong>بدون ثبت‌نام و شماره</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">در اولین اجرا یک جفت‌کلید رمزنگاری امن روی سیستم شما ساخته می‌شود و هویت شما کاملاً در اختیار خودتان است.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">۲</div>
+            <strong>رایانه شما یک رله است</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">با فشردن کلید <code>[r]</code> سیستم شما به یک رله روی پورت <code>4869</code> تبدیل شده و دیگران می‌توانند به شما وصل شوند.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">۳</div>
+            <strong>کشف خودکار در وای‌فای</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">کاربران متصل به یک مودم یا شبکه محلی بدون وارد کردن هیچ آدرسی، خودکار یکدیگر را پیدا می‌کنند.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">۴</div>
+            <strong>صندوق ارسال آفلاین</strong>
+            <p style="font-size: 0.88rem; margin-top: 6px;">در زمان قطع کامل شبکه پیام‌هایتان را بنویسید؛ به محض برقراری اتصال با هر ایستگاهی، پیام‌ها خودکار ارسال می‌شوند.</p>
+          </div>
+        </div>
+
+        <div class="diagram-box">
+┌────────────────────────────────────────────────────────────────────────┐
+│                   نحوه انتقال داده‌ها در سامانه DEADAIR                 │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   [دستگاه شما] ──── (وای‌فای محلی: UDP 48690) ───► [همکار یا همسایه]   │
+│         │                                         (شناسایی خودکار)     │
+│         │                                                              │
+│         ▼ (فشردن کلید [r] روی پورت 4869)                               │
+│   [رله داخلی شما] ◄─── (آدرس IP داخلی) ───► [دوست در شهر دیگر]          │
+│                                            (اتصال اینترانت ملی)        │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+        </div>
+
+        <h3 style="margin-top: 16px; font-size: 1.05rem;">سناریوهای واقعی:</h3>
+        <ul style="margin-right: 20px; margin-top: 8px;">
+          <li><strong>در یک ساختمان یا دفتر کار:</strong> به وای‌فای وصل شوید و برنامه را باز کنید؛ بدون هیچ تنظیماتی با دیگران گفتگو کنید.</li>
+          <li><strong>ارتباط بین دو شهر در زمان قطعی اینترنت:</strong> یکی از طرفین کلید <code>[r]</code> را می‌زند تا رله روشن شود، کلید <code>[s]</code> را می‌زند و آدرس را با پیامک برای دیگری می‌فرستد. طرف مقابل دستور <code>/bookmark add ws://5.x.x.x:4869 Ali</code> را می‌زند و چت برقرار می‌شود.</li>
         </ul>
       </div>
 
       <div class="box">
-        <div class="box-title">نصب سریع با یک دستور (لینوکس و مک)</div>
-        <p>دستور زیر را در ترمینال خود اجرا کنید تا فرمان deadair در سیستم شما نصب و فعال شود:</p>
-        <pre>curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash</pre>
+        <div class="box-title">نمای زنده خط فرمان و محیط گرافیکی</div>
+        <img src="images/demo.gif" alt="پیش‌نمایش محیط برنامه" style="width: 100%; border: var(--border); box-shadow: var(--shadow); margin-top: 8px; display: block;">
       </div>
 
       <div class="box">
-        <div class="box-title">دریافت فایل‌های اجرایی آماده و نرم‌افزار اندروید</div>
-        <p>فایل اجرایی مستقل یا اپلیکیشن سبک موبایل را بدون نیاز به هیچ وابستگی خارجی دریافت کنید.</p>
+        <div class="box-title">
+          <span>نصب خودکار از روی سورس کد</span>
+          <span class="highlight">پیشنهادی</span>
+        </div>
+        <p>اسکریپت هوشمند تمام پیش‌نیازها را بررسی و نصب کرده و برنامه را برای سیستم شما کامپایل می‌کند. می‌توانید نسخه <strong>ترمینال (TUI)</strong>، نسخه <strong>گرافیکی دسکتاپ (GUI)</strong> یا <strong>هر دو</strong> را انتخاب کنید.</p>
+        
+        <p style="margin-top: 14px;"><strong>لینوکس و مک اواس:</strong></p>
+        <pre>curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash</pre>
+
+        <p style="margin-top: 14px;"><strong>ویندوز (PowerShell):</strong></p>
+        <pre>irm https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.ps1 | iex</pre>
+      </div>
+
+      <div class="box">
+        <div class="box-title">فایل‌های اجرایی آماده</div>
+        <p>در صورت تمایل می‌توانید فایل‌های از پیش کامپایل‌شده همراه با آیکون اختصاصی را دریافت کنید:</p>
         <div class="download-grid">
-          <a class="download-card" style="border: 3px solid #ff0055;" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-android-arm64.apk">
-            <strong>اپلیکیشن اندروید</strong>
-            <span>فایل نصبی APK (~3-5 MB)</span>
-          </a>
           <a class="download-card" style="border: 3px solid #00ffff;" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-gui-linux-x86_64.tar.gz">
             <strong>نسخه گرافیکی دسکتاپ</strong>
-            <span>لینوکس x86_64 (Tauri v2)</span>
+            <span>لینوکس x86_64 (همراه آیکون)</span>
           </a>
           <a class="download-card" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-linux-x86_64.tar.gz">
             <strong>ترمینال لینوکس</strong>
-            <span>معماری x86_64 (.tar.gz)</span>
+            <span>x86_64 (.tar.gz)</span>
           </a>
           <a class="download-card" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-windows-x86_64.zip">
             <strong>ترمینال ویندوز</strong>
-            <span>معماری x86_64 (.zip)</span>
+            <span>x86_64 (.zip)</span>
           </a>
           <a class="download-card" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-macos-arm64.tar.gz">
             <strong>مک اواس اپل سیلیکون</strong>
-            <span>پردازنده‌های M1/M2/M3/M4 (.tar.gz)</span>
+            <span>پردازنده‌های M1 تا M4</span>
           </a>
           <a class="download-card" href="https://github.com/deltafsociety/dead-air/releases/latest/download/deadair-macos-x86_64.tar.gz">
             <strong>مک اواس اینتل</strong>
-            <span>معماری x86_64 (.tar.gz)</span>
+            <span>معماری x86_64</span>
           </a>
         </div>
       </div>
 
       <div class="box">
-        <div class="box-title">دستورات ترمینال</div>
+        <div class="box-title">دستورات و کلیدهای میانبر</div>
         <table>
           <thead>
             <tr>
               <th>دستور</th>
-              <th>توضیحات</th>
+              <th>عملکرد</th>
             </tr>
           </thead>
           <tbody>
             <tr>
+              <td><code>/name &lt;نام&gt;</code></td>
+              <td>تعیین نام نمایشی در شبکه.</td>
+            </tr>
+            <tr>
               <td><code>/share</code></td>
-              <td>نمایش آدرس ایستگاه داخلی جهت اشتراک‌گذاری با دیگران.</td>
+              <td>نمایش آدرس ایستگاه جهت اشتراک‌گذاری با دیگران.</td>
             </tr>
             <tr>
               <td><code>/ip</code></td>
-              <td>تشخیص مجدد آدرس IP شبکه داخلی.</td>
-            </tr>
-            <tr>
-              <td><code>/name &lt;نام&gt;</code></td>
-              <td>تنظیم نام نمایشی و انتشار مشخصات هویتی برای سایر کاربران.</td>
+              <td>بررسی مجدد آدرس IP شبکه داخلی.</td>
             </tr>
             <tr>
               <td><code>/bookmark add &lt;آدرس&gt; [نام]</code></td>
-              <td>ذخیره رله داخلی در نشانک‌ها و اتصال به آن.</td>
+              <td>ذخیره رله دیگران و اتصال به آن.</td>
             </tr>
             <tr>
               <td><code>/bookmark remove &lt;شناسه&gt;</code></td>
-              <td>حذف رله از فهرست نشانک‌ها.</td>
+              <td>حذف یک رله از ذخیره‌شده‌ها.</td>
             </tr>
             <tr>
               <td><code>/bookmark connect</code></td>
               <td>اتصال مجدد به تمامی نشانک‌های ذخیره‌شده.</td>
             </tr>
             <tr>
-              <td><code>/relay add &lt;آدرس&gt;</code></td>
-              <td>افزودن آدرس رله جدید (و ذخیره خودکار در نشانک‌ها).</td>
-            </tr>
-            <tr>
-              <td><code>/relay public</code></td>
-              <td>اتصال یا قطع اتصال به رله‌های رایگان اینترنت جهانی.</td>
-            </tr>
-            <tr>
-              <td><code>/tab [station|public]</code></td>
-              <td>جابه‌جایی میان برگه گفتگوهای DEADAIR و برگه شبکه اجتماعی رله‌های عمومی.</td>
-            </tr>
-            <tr>
               <td><code>/like</code></td>
-              <td>پسندیدن (واکنش نوستر Kind 7) یادداشت عمومی انتخاب‌شده.</td>
+              <td>پسندیدن (❤️ لایک) پیام انتخاب‌شده.</td>
             </tr>
             <tr>
-              <td><code>/reply &lt;پیام&gt;</code></td>
-              <td>ارسال پاسخ رشته‌ای (Kind 1 با تگ‌های ارجاع) به پست انتخاب‌شده.</td>
+              <td><code>/reply &lt;متن&gt;</code></td>
+              <td>ارسال پاسخ مستقیم به پیام انتخاب‌شده.</td>
             </tr>
             <tr>
               <td><code>/clear</code></td>
-              <td>پاک کردن پیام‌های برگه فعال کنونی.</td>
+              <td>پاک کردن پیام‌های روی صفحه.</td>
             </tr>
             <tr>
               <td><code>/help</code></td>
-              <td>نمایش راهنمای دستورات.</td>
+              <td>مشاهده راهنمای دستورات.</td>
             </tr>
           </tbody>
         </table>
@@ -551,68 +755,70 @@ cargo build --release
           </thead>
           <tbody>
             <tr>
-              <td><code>Tab</code> یا <code>t</code></td>
-              <td>جابه‌جایی سریع میان برگه ایستگاه DEADAIR و شبکه اجتماعی رله‌های عمومی.</td>
-            </tr>
-            <tr>
-              <td><code>1</code> یا <code>2</code></td>
-              <td>پرش مستقیم به برگه ایستگاه (1) یا برگه شبکه عمومی (2).</td>
-            </tr>
-            <tr>
               <td><code>j</code> / <code>Down</code></td>
-              <td>حرکت به سمت پست‌های تازه‌تر در برگه عمومی (مکث جریان زنده).</td>
+              <td>حرکت به سمت پیام‌های جدیدتر (مکث جریان زنده).</td>
             </tr>
             <tr>
               <td><code>k</code> / <code>Up</code></td>
-              <td>حرکت به سمت پست‌های قدیمی‌تر در برگه عمومی (مکث جریان زنده).</td>
+              <td>حرکت به سمت پیام‌های قدیمی‌تر (مکث جریان زنده).</td>
             </tr>
             <tr>
-              <td><code>g</code> یا <code>Home</code></td>
-              <td>از سرگیری جریان زنده پیام‌ها در برگه عمومی.</td>
+              <td><code>g</code> / <code>Home</code></td>
+              <td>بازگشت به پخش زنده پیام‌ها.</td>
             </tr>
             <tr>
-              <td><code>l</code> یا <code>L</code></td>
-              <td>لایک کردن (❤️ واکنش Kind 7) پست عمومی انتخاب‌شده.</td>
+              <td><code>l</code> / <code>L</code></td>
+              <td>لایک کردن (❤️) پیام انتخاب‌شده.</td>
             </tr>
             <tr>
-              <td><code>r</code> (برگه عمومی)</td>
-              <td>ارسال پاسخ به پست انتخاب‌شده (💬 پاسخ رشته‌ای).</td>
+              <td><code>r</code></td>
+              <td>پاسخ دادن (💬) به پیام انتخاب‌شده.</td>
             </tr>
             <tr>
-              <td><code>r</code> یا <code>F2</code> (برگه ایستگاه)</td>
-              <td>روشن یا خاموش کردن رله داخلی روی پورت 4869.</td>
+              <td><code>R</code> / <code>F2</code></td>
+              <td>روشن/خاموش کردن رله محلی (پورت 4869).</td>
             </tr>
             <tr>
-              <td><code>p</code></td>
-              <td>تغییر وضعیت رله‌های عمومی اینترنت.</td>
+              <td><code>i</code> / <code>Enter</code></td>
+              <td>ورود به حالت نوشتن پیام.</td>
             </tr>
             <tr>
-              <td><code>c</code></td>
-              <td>پاک کردن پیام‌های صفحه نمایش.</td>
+              <td><code>Esc</code></td>
+              <td>انصراف از نوشتن و بازگشت به مرور.</td>
             </tr>
             <tr>
-              <td><code>q</code></td>
+              <td><code>s</code></td>
+              <td>نمایش آدرس ایستگاه شما.</td>
+            </tr>
+            <tr>
+              <td><code>b</code></td>
+              <td>اتصال مجدد به تمامی نشانک‌ها.</td>
+            </tr>
+            <tr>
+              <td><code>q</code> / <code>Ctrl+C</code></td>
               <td>خروج از برنامه.</td>
             </tr>
           </tbody>
         </table>
       </div>
-
-      <div class="box">
-        <div class="box-title">اجرای سریع از طریق سورس کد</div>
-        <pre># نصب مستقیم با ابزار کارگو
-cargo install --git https://github.com/deltafsociety/dead-air.git
-
-# یا کامپایل دستی نسخه نهایی
-git clone https://github.com/deltafsociety/dead-air.git
-cd dead-air
-cargo build --release
-./target/release/deadair</pre>
-      </div>
     </main>
 
+    <!-- FOOTER WITH DONATE & TELEGRAM -->
     <footer>
-      <p>DEADAIR - Open Source, Offline-First, Intranet Nostr Protocol Implementation.</p>
+      <div class="footer-links">
+        <a class="btn btn-github" href="https://github.com/deltafsociety/dead-air" target="_blank" rel="noopener">
+          <span>★</span> GitHub Repository
+        </a>
+        <a class="btn btn-donate" href="https://coindrop.to/delta" target="_blank" rel="noopener">
+          <span>☕</span> Donate (coindrop.to/delta)
+        </a>
+        <a class="btn btn-telegram" href="https://t.me/LOW_SIGNAL73" target="_blank" rel="noopener">
+          <span>📢</span> Telegram (@LOW_SIGNAL73)
+        </a>
+      </div>
+      <p style="font-size: 0.85rem; color: #555;">
+        DEADAIR — Open source, offline-first sovereign communication station.
+      </p>
     </footer>
   </div>
 

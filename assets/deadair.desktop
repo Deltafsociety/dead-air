@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=DEADAIR
+Comment=Offline-first sovereign Nostr station for blackouts and intranet mesh survival
+Exec=deadair
+Icon=deadair
+Terminal=true
+Type=Application
+Categories=Network;Chat;InstantMessaging;
+Keywords=nostr;mesh;intranet;blackout;offline;

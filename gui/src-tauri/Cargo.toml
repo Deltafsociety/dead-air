@@ -1,13 +1,13 @@
 [package]
 name = "deadair-gui"
 version = "0.1.0"
-description = "DEADAIR GUI and Android Station"
+description = "DEADAIR GUI Desktop Station"
 authors = ["deltafsociety"]
 edition = "2024"
 
 [lib]
 name = "deadair_gui_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.4", features = [] }

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use deadair::app::{ProfileInfo, DEFAULT_PUBLIC_RELAYS};
+use deadair::app::ProfileInfo;
 use deadair::bookmarks::BookmarkManager;
 use deadair::client::ClientPool;
 use deadair::discovery::{DiscoveryManager, PeerNode};
@@ -63,10 +63,8 @@ pub struct StateDto {
     pub relay_port: u16,
     pub share_address: String,
     pub detected_ip: String,
-    pub public_relays_active: bool,
     pub outbox_count: usize,
     pub station_notes: Vec<NoteDto>,
-    pub public_notes: Vec<NoteDto>,
     pub bookmarks: Vec<BookmarkDto>,
     pub relays: Vec<RelayStatusDto>,
     pub peers: Vec<PeerDto>,
@@ -82,7 +80,6 @@ pub struct GuiBackend {
     pub outbox: Outbox,
     pub bookmarks: BookmarkManager,
     pub station_notes: Vec<Event>,
-    pub public_notes: Vec<Event>,
     pub profiles: HashMap<PublicKey, String>,
     pub profile_details: HashMap<PublicKey, ProfileInfo>,
     pub post_likes: HashMap<EventId, usize>,
@@ -91,13 +88,12 @@ pub struct GuiBackend {
     pub my_likes: HashSet<EventId>,
     pub share_address: String,
     pub detected_ip: String,
-    pub public_relays_active: bool,
     pub discovered_peers: Vec<PeerNode>,
     pub inbound_event_tx: mpsc::UnboundedSender<(Event, String)>,
 }
 
 impl GuiBackend {
-    pub fn event_to_dto(&self, ev: &Event, is_deadair: bool) -> NoteDto {
+    pub fn event_to_dto(&self, ev: &Event) -> NoteDto {
         let display_name = self
             .profile_details
             .get(&ev.pubkey)
@@ -142,7 +138,7 @@ impl GuiBackend {
             created_at: created_at_sec,
             relative_time,
             color_idx,
-            is_deadair,
+            is_deadair: true,
             likes,
             reposts,
             replies,
@@ -152,11 +148,14 @@ impl GuiBackend {
         }
     }
 
-    pub fn is_deadair_event(&self, event: &Event, source_url: Option<&str>) -> bool {
+    /// Exclusively accept events that originate from DEADAIR stations/users
+    pub fn is_deadair_event(&self, event: &Event) -> bool {
+        // 1. Authored by the local user
         if event.pubkey == self.identity.keys.public_key() {
             return true;
         }
 
+        // 2. Contains standard DEADAIR client tag
         let has_deadair_tag = event.tags.iter().any(|t| {
             let slice = t.as_slice();
             slice.len() >= 2 && slice[0].eq_ignore_ascii_case("client") && slice[1].eq_ignore_ascii_case("deadair")
@@ -165,20 +164,12 @@ impl GuiBackend {
             return true;
         }
 
+        // 3. Authored by a known LAN peer discovered via UDP beacon
         if self.discovered_peers.iter().any(|p| {
             p.name == event.pubkey.to_hex()
                 || self.profiles.get(&event.pubkey).map_or(false, |name| name == &p.name)
         }) {
             return true;
-        }
-
-        if let Some(url) = source_url {
-            if url == "embedded" || url.contains("127.0.0.1") || url.contains("localhost") {
-                return true;
-            }
-            if !DEFAULT_PUBLIC_RELAYS.contains(&url) {
-                return true;
-            }
         }
 
         false
@@ -219,18 +210,9 @@ async fn get_state(state: tauri::State<'_, Arc<Mutex<GuiBackend>>>) -> Result<St
         .station_notes
         .iter()
         .rev()
-        .take(100)
-        .rev()
-        .map(|e| backend.event_to_dto(e, true))
-        .collect();
-
-    let public_notes: Vec<NoteDto> = backend
-        .public_notes
-        .iter()
-        .rev()
         .take(150)
         .rev()
-        .map(|e| backend.event_to_dto(e, false))
+        .map(|e| backend.event_to_dto(e))
         .collect();
 
     let bookmarks = backend
@@ -279,10 +261,8 @@ async fn get_state(state: tauri::State<'_, Arc<Mutex<GuiBackend>>>) -> Result<St
         relay_port: backend.relay_port,
         share_address: backend.share_address.clone(),
         detected_ip: backend.detected_ip.clone(),
-        public_relays_active: backend.public_relays_active,
         outbox_count: backend.outbox.len(),
         station_notes,
-        public_notes,
         bookmarks,
         relays,
         peers,
@@ -291,7 +271,6 @@ async fn get_state(state: tauri::State<'_, Arc<Mutex<GuiBackend>>>) -> Result<St
 
 #[tauri::command]
 async fn send_note(
-    tab: String,
     text: String,
     reply_to_id: Option<String>,
     reply_to_pubkey: Option<String>,
@@ -303,13 +282,8 @@ async fn send_note(
         return Err("Message content is empty".to_string());
     }
 
-    let is_station = tab.to_lowercase() == "station";
-    let mut builder = EventBuilder::new(Kind::TextNote, clean_text);
-
-    if is_station {
-        let deadair_tag = Tag::parse(["client", "deadair"]).unwrap_or_else(|_| Tag::hashtag("deadair"));
-        builder = builder.tag(deadair_tag);
-    }
+    let deadair_tag = Tag::parse(["client", "deadair"]).unwrap_or_else(|_| Tag::hashtag("deadair"));
+    let mut builder = EventBuilder::new(Kind::TextNote, clean_text).tag(deadair_tag);
 
     if let Some(target_hex) = reply_to_id {
         if let Ok(event_id) = EventId::from_hex(&target_hex) {
@@ -334,13 +308,8 @@ async fn send_note(
 
     backend.client_pool.publish(event.clone());
 
-    let dto = backend.event_to_dto(&event, is_station);
-
-    if is_station {
-        backend.station_notes.push(event);
-    } else {
-        backend.public_notes.push(event);
-    }
+    let dto = backend.event_to_dto(&event);
+    backend.station_notes.push(event);
 
     Ok(dto)
 }
@@ -430,24 +399,6 @@ async fn toggle_embedded_relay(
 }
 
 #[tauri::command]
-async fn toggle_public_mesh(
-    state: tauri::State<'_, Arc<Mutex<GuiBackend>>>,
-) -> Result<bool, String> {
-    let mut backend = state.lock().await;
-
-    if backend.public_relays_active {
-        backend.public_relays_active = false;
-        Ok(false)
-    } else {
-        for &url in DEFAULT_PUBLIC_RELAYS {
-            backend.client_pool.add_relay(url.to_string());
-        }
-        backend.public_relays_active = true;
-        Ok(true)
-    }
-}
-
-#[tauri::command]
 async fn add_bookmark(
     url: String,
     name: String,
@@ -493,21 +444,15 @@ async fn remove_bookmark(
 
 #[tauri::command]
 async fn clear_timeline(
-    tab: String,
     state: tauri::State<'_, Arc<Mutex<GuiBackend>>>,
 ) -> Result<(), String> {
     let mut backend = state.lock().await;
-    if tab.to_lowercase() == "station" {
-        backend.station_notes.clear();
-    } else {
-        backend.public_notes.clear();
-    }
+    backend.station_notes.clear();
     Ok(())
 }
 
 // ----------------- Tauri App Setup -----------------
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
@@ -558,7 +503,6 @@ pub fn run() {
                     outbox,
                     bookmarks,
                     station_notes: Vec::new(),
-                    public_notes: Vec::new(),
                     profiles,
                     profile_details: HashMap::new(),
                     post_likes: HashMap::new(),
@@ -567,18 +511,17 @@ pub fn run() {
                     my_likes: HashSet::new(),
                     share_address: format!("ws://127.0.0.1:{}", relay_port),
                     detected_ip: "127.0.0.1".to_string(),
-                    public_relays_active: false,
                     discovered_peers: Vec::new(),
                     inbound_event_tx,
                 }));
 
                 app_handle.manage(backend.clone());
 
-                // Background task 1: Inbound Nostr events
+                // Background task 1: Inbound Nostr events (strictly for DEADAIR users)
                 let backend_inbound = backend.clone();
                 let handle_inbound = app_handle.clone();
                 tokio::spawn(async move {
-                    while let Some((event, source_url)) = inbound_event_rx.recv().await {
+                    while let Some((event, _source_url)) = inbound_event_rx.recv().await {
                         let mut b = backend_inbound.lock().await;
 
                         if event.kind == Kind::Metadata {
@@ -610,24 +553,15 @@ pub fn run() {
                                 *b.post_replies.entry(target_id).or_insert(0) += 1;
                             }
 
-                            let is_station = b.is_deadair_event(&event, Some(&source_url));
-                            let note_dto = b.event_to_dto(&event, is_station);
-
-                            if is_station {
+                            // Strict filter: Accept only notes from DEADAIR stations
+                            if b.is_deadair_event(&event) {
                                 if !b.station_notes.iter().any(|e| e.id == event.id) {
+                                    let note_dto = b.event_to_dto(&event);
                                     b.station_notes.push(event);
                                     if b.station_notes.len() > 1000 {
                                         b.station_notes.remove(0);
                                     }
                                     let _ = handle_inbound.emit("station_note", note_dto);
-                                }
-                            } else {
-                                if !b.public_notes.iter().any(|e| e.id == event.id) {
-                                    b.public_notes.push(event);
-                                    if b.public_notes.len() > 1000 {
-                                        b.public_notes.remove(0);
-                                    }
-                                    let _ = handle_inbound.emit("public_note", note_dto);
                                 }
                             }
                         }
@@ -672,7 +606,6 @@ pub fn run() {
             like_note,
             set_station_name,
             toggle_embedded_relay,
-            toggle_public_mesh,
             add_bookmark,
             remove_bookmark,
             clear_timeline,

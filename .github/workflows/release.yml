@@ -97,97 +97,9 @@ jobs:
           name: deadair-gui-linux-x86_64.tar.gz
           path: deadair-gui-linux-x86_64.tar.gz
 
-  build-android:
-    name: Build Android APK
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-
-      - name: Setup Android SDK & NDK
-        run: |
-          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          NDK_PATH=$(find $ANDROID_HOME/ndk -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1 || true)
-          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
-          echo "Found Android NDK at: $NDK_PATH"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Install Rust & Android Targets
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi
-
-      - name: Setup Node & pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Build, Align, and Sign Android APK
-        run: |
-          cd gui
-          pnpm dlx @tauri-apps/cli android init --ci
-
-          MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            if ! grep -q "CHANGE_WIFI_MULTICAST_STATE" "$MANIFEST"; then
-              sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />' "$MANIFEST"
-            fi
-          fi
-
-          pnpm dlx @tauri-apps/cli android build --apk --target aarch64 --target armv7 --ci
-
-          # Find highest version build-tools
-          BUILD_TOOLS=$(find $ANDROID_HOME/build-tools -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
-          echo "Using Android build-tools: $BUILD_TOOLS"
-
-          # Generate release keystore
-          keytool -genkeypair -v \
-            -keystore release.keystore \
-            -alias deadair \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass deadairpass \
-            -keypass deadairpass \
-            -dname "CN=DEADAIR, OU=Mobile, O=deltafsociety, L=Tehran, C=IR"
-
-          mkdir -p ../dist
-          RAW_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" 2>/dev/null | head -n 1)
-          echo "Found raw APK: $RAW_APK"
-
-          # 4-byte ZipAlign APK
-          $BUILD_TOOLS/zipalign -v -p -f 4 "$RAW_APK" aligned.apk
-
-          # Sign with APK Signature Scheme v2/v3
-          $BUILD_TOOLS/apksigner sign \
-            --ks release.keystore \
-            --ks-pass pass:deadairpass \
-            --key-pass pass:deadairpass \
-            --out ../dist/deadair-android.apk \
-            aligned.apk
-
-          # Verify signature
-          $BUILD_TOOLS/apksigner verify --verbose ../dist/deadair-android.apk
-
-          # Also create arm64 copy for backward-compatibility with older links
-          cp ../dist/deadair-android.apk ../dist/deadair-android-arm64.apk
-
-      - name: Upload Android APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deadair-android.apk
-          path: dist/deadair-android*.apk
-
   release:
     name: Publish Release
-    needs: [build, build-gui-desktop, build-android]
+    needs: [build, build-gui-desktop]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:

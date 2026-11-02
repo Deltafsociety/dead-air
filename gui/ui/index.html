@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>DEADAIR // Intranet Nostr Station</title>
+  <title>DEADAIR // Sovereign Intranet Station</title>
+  <link rel="icon" type="image/png" href="icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,7 +12,7 @@
     <!-- Top Header -->
     <header class="station-header">
       <div class="brand">
-        <span class="pulse-dot"></span>
+        <img src="icon.png" alt="DEADAIR logo" class="brand-icon" style="width: 24px; height: 24px; border-radius: 4px; vertical-align: middle; margin-right: 6px;">
         <span class="logo">DEADAIR</span>
         <span class="version">v0.1.4</span>
       </div>
@@ -27,10 +28,10 @@
           <span id="relay-text">ACTIVE :4869</span>
         </button>
 
-        <button id="public-mesh-pill" class="badge badge-mesh" title="Toggle public internet relays">
-          <span class="badge-label">PUBLIC:</span>
-          <span id="public-mesh-text">OFF</span>
-        </button>
+        <div class="badge badge-mesh" title="Client strictly restricted to DEADAIR network">
+          <span class="badge-label">MESH:</span>
+          <span>DEADAIR ONLY</span>
+        </div>
 
         <div id="share-pill" class="badge badge-share" title="Click to copy connection address">
           <span class="badge-label">SHARE:</span>
@@ -40,18 +41,14 @@
       </div>
     </header>
 
-    <!-- Navigation Tabs -->
+    <!-- Navigation Bar -->
     <nav class="nav-tabs">
       <button id="tab-station-btn" class="tab-btn active">
-        <span class="tab-num">[1]</span> DEADAIR Station
+        <span class="tab-num">●</span> DEADAIR Station Feed
         <span id="station-badge-count" class="tab-counter">0</span>
       </button>
-      <button id="tab-public-btn" class="tab-btn">
-        <span class="tab-num">[2]</span> Public Mesh
-        <span id="public-badge-count" class="tab-counter">0</span>
-      </button>
       <button id="sidebar-toggle-btn" class="tab-btn mobile-only">
-        <span class="tab-num">[3]</span> Nodes &amp; Relays
+        <span class="tab-num">⚙</span> Nodes &amp; Relays
       </button>
     </nav>
 
@@ -67,7 +64,7 @@
           </div>
           <div class="stream-actions">
             <button id="resume-stream-btn" class="btn-micro" style="display: none;">Resume Stream</button>
-            <button id="clear-feed-btn" class="btn-micro">Clear Tab</button>
+            <button id="clear-feed-btn" class="btn-micro">Clear Feed</button>
           </div>
         </div>
 
@@ -86,7 +83,7 @@
         <!-- Composer Footer -->
         <footer class="composer-footer">
           <div class="composer-box">
-            <textarea id="note-input" placeholder="Broadcast message across intranet (or /help)..." rows="2"></textarea>
+            <textarea id="note-input" placeholder="Broadcast message across DEADAIR intranet mesh (or /help)..." rows="2"></textarea>
             <button id="send-btn" class="btn-transmit">TRANSMIT</button>
           </div>
         </footer>
@@ -108,6 +105,10 @@
           <div class="spec-row">
             <span class="spec-label">Outbox:</span>
             <span id="spec-outbox" class="spec-val">0 pending</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Network:</span>
+            <span class="spec-val" style="color: var(--accent-cyan);">DEADAIR Exclusive</span>
           </div>
         </div>
 

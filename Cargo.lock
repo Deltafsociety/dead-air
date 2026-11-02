@@ -850,6 +850,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "tauri-winres",
  "tokio",
  "tokio-tungstenite",
 ]

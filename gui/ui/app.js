@@ -1,10 +1,8 @@
-// DEADAIR GUI & Mobile Client
+// DEADAIR GUI Desktop Client
 (function () {
   let state = {
-    activeTab: 'station',
     replyingTo: null,
     stationNotes: [],
-    publicNotes: [],
     relays: [],
     peers: [],
     bookmarks: [],
@@ -12,7 +10,6 @@
     shareAddress: 'ws://127.0.0.1:4869',
     detectedIp: '127.0.0.1',
     relayActive: true,
-    publicActive: false,
     outboxCount: 0,
     autoScroll: true,
   };
@@ -24,15 +21,12 @@
   const noteInput = document.getElementById('note-input');
   const sendBtn = document.getElementById('send-btn');
   const tabStationBtn = document.getElementById('tab-station-btn');
-  const tabPublicBtn = document.getElementById('tab-public-btn');
   const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
   const sidebar = document.getElementById('station-sidebar');
   const handleBadge = document.getElementById('handle-badge');
   const handleText = document.getElementById('handle-text');
   const relayPill = document.getElementById('relay-pill');
   const relayText = document.getElementById('relay-text');
-  const publicMeshPill = document.getElementById('public-mesh-pill');
-  const publicMeshText = document.getElementById('public-mesh-text');
   const sharePill = document.getElementById('share-pill');
   const shareText = document.getElementById('share-text');
   const replyBanner = document.getElementById('reply-banner');
@@ -42,7 +36,6 @@
   const resumeStreamBtn = document.getElementById('resume-stream-btn');
   const streamLabel = document.getElementById('stream-label');
   const stationBadgeCount = document.getElementById('station-badge-count');
-  const publicBadgeCount = document.getElementById('public-badge-count');
   const toastEl = document.getElementById('toast-notification');
   const specIp = document.getElementById('spec-ip');
   const specNpub = document.getElementById('spec-npub');
@@ -101,7 +94,7 @@
 
   function renderNoteCard(note) {
     const card = document.createElement('article');
-    card.className = `note-card ${note.is_deadair ? 'deadair-post' : ''}`;
+    card.className = 'note-card deadair-post';
     card.dataset.id = note.id;
 
     const color = AVATAR_COLORS[note.color_idx % AVATAR_COLORS.length] || '#00e5ff';
@@ -113,7 +106,7 @@
         <span class="author-handle">${escapeHtml(note.handle)}</span>
         <span class="bullet">•</span>
         <span class="note-time" data-ts="${note.created_at}">${note.relative_time}</span>
-        ${note.is_deadair ? '<span class="station-badge">DEADAIR</span>' : ''}
+        <span class="station-badge">DEADAIR</span>
       </div>
       <div class="note-content">${formatContent(note.content)}</div>
       <div class="note-footer">
@@ -131,22 +124,19 @@
   }
 
   function updateTimeline() {
-    const notes = state.activeTab === 'station' ? state.stationNotes : state.publicNotes;
     notesContainer.innerHTML = '';
 
-    if (notes.length === 0) {
+    if (state.stationNotes.length === 0) {
       notesContainer.innerHTML = `
         <div class="empty-state" style="margin-top: 40px; font-size: 0.9rem;">
-          ${state.activeTab === 'station'
-            ? 'No messages on domestic station yet. Type below to broadcast across your intranet.'
-            : 'No public relay notes cached. Toggle [PUBLIC] to stream global notes.'}
+          No transmissions on DEADAIR station yet. Type below to broadcast across your intranet mesh.
         </div>
       `;
       return;
     }
 
     const fragment = document.createDocumentFragment();
-    notes.forEach((note) => {
+    state.stationNotes.forEach((note) => {
       fragment.appendChild(renderNoteCard(note));
     });
     notesContainer.appendChild(fragment);
@@ -189,14 +179,6 @@
     }
   }
 
-  function switchTab(tab) {
-    state.activeTab = tab;
-    tabStationBtn.classList.toggle('active', tab === 'station');
-    tabPublicBtn.classList.toggle('active', tab === 'public');
-    sidebar.classList.remove('open');
-    updateTimeline();
-  }
-
   function setReplyContext(id, pubkey, author) {
     state.replyingTo = { id, pubkey, author };
     replyTargetName.textContent = `@${author}`;
@@ -224,7 +206,6 @@
       const replyPk = state.replyingTo ? state.replyingTo.pubkey : null;
 
       const note = await invoke('send_note', {
-        tab: state.activeTab,
         text,
         replyToId: replyId,
         replyToPubkey: replyPk,
@@ -234,15 +215,10 @@
       clearReplyContext();
 
       if (note) {
-        if (state.activeTab === 'station') {
-          state.stationNotes.push(note);
-          stationBadgeCount.textContent = state.stationNotes.length;
-        } else {
-          state.publicNotes.push(note);
-          publicBadgeCount.textContent = state.publicNotes.length;
-        }
+        state.stationNotes.push(note);
+        stationBadgeCount.textContent = state.stationNotes.length;
         updateTimeline();
-        showToast('Transmitted note across network');
+        showToast('Transmitted note across DEADAIR network');
       }
     } catch (err) {
       showToast(`Error: ${err}`);
@@ -262,9 +238,8 @@
         showToast(`Error: ${err}`);
       }
     } else if (parts[0] === '/clear') {
-      await invoke('clear_timeline', { tab: state.activeTab });
-      if (state.activeTab === 'station') state.stationNotes = [];
-      else state.publicNotes = [];
+      await invoke('clear_timeline');
+      state.stationNotes = [];
       updateTimeline();
       showToast('Timeline cleared');
     } else if (parts[0] === '/help') {
@@ -281,16 +256,22 @@
     }
   });
 
-  tabStationBtn.addEventListener('click', () => switchTab('station'));
-  tabPublicBtn.addEventListener('click', () => switchTab('public'));
-  sidebarToggleBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
+  if (tabStationBtn) {
+    tabStationBtn.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      updateTimeline();
+    });
+  }
+
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
+  }
 
   cancelReplyBtn.addEventListener('click', clearReplyContext);
 
   clearFeedBtn.addEventListener('click', async () => {
-    await invoke('clear_timeline', { tab: state.activeTab });
-    if (state.activeTab === 'station') state.stationNotes = [];
-    else state.publicNotes = [];
+    await invoke('clear_timeline');
+    state.stationNotes = [];
     updateTimeline();
   });
 
@@ -361,18 +342,6 @@
     }
   });
 
-  publicMeshPill.addEventListener('click', async () => {
-    try {
-      const active = await invoke('toggle_public_mesh');
-      state.publicActive = active;
-      publicMeshPill.classList.toggle('active', active);
-      publicMeshText.textContent = active ? 'ON' : 'OFF';
-      showToast(active ? 'Connected to global public relays' : 'Disconnected from public relays');
-    } catch (err) {
-      showToast(`Error: ${err}`);
-    }
-  });
-
   sharePill.addEventListener('click', () => {
     navigator.clipboard.writeText(state.shareAddress).then(() => {
       showToast(`Copied ${state.shareAddress} to clipboard`);
@@ -405,10 +374,8 @@
       state.relayActive = res.relay_active;
       state.shareAddress = res.share_address;
       state.detectedIp = res.detected_ip;
-      state.publicActive = res.public_relays_active;
       state.outboxCount = res.outbox_count;
       state.stationNotes = res.station_notes || [];
-      state.publicNotes = res.public_notes || [];
       state.bookmarks = res.bookmarks || [];
       state.relays = res.relays || [];
       state.peers = res.peers || [];
@@ -417,11 +384,8 @@
       shareText.textContent = res.share_address;
       relayPill.classList.toggle('active', res.relay_active);
       relayText.textContent = res.relay_active ? `ACTIVE :${res.relay_port}` : 'OFF';
-      publicMeshPill.classList.toggle('active', res.public_relays_active);
-      publicMeshText.textContent = res.public_relays_active ? 'ON' : 'OFF';
 
       stationBadgeCount.textContent = state.stationNotes.length;
-      publicBadgeCount.textContent = state.publicNotes.length;
 
       updateTimeline();
       updateSidebar();
@@ -435,19 +399,8 @@
     window.__TAURI__.event.listen('station_note', (event) => {
       state.stationNotes.push(event.payload);
       stationBadgeCount.textContent = state.stationNotes.length;
-      if (state.activeTab === 'station') {
-        notesContainer.appendChild(renderNoteCard(event.payload));
-        if (state.autoScroll) notesContainer.scrollTop = notesContainer.scrollHeight;
-      }
-    });
-
-    window.__TAURI__.event.listen('public_note', (event) => {
-      state.publicNotes.push(event.payload);
-      publicBadgeCount.textContent = state.publicNotes.length;
-      if (state.activeTab === 'public') {
-        notesContainer.appendChild(renderNoteCard(event.payload));
-        if (state.autoScroll) notesContainer.scrollTop = notesContainer.scrollHeight;
-      }
+      notesContainer.appendChild(renderNoteCard(event.payload));
+      if (state.autoScroll) notesContainer.scrollTop = notesContainer.scrollHeight;
     });
 
     window.__TAURI__.event.listen('peer_discovered', (event) => {
@@ -465,7 +418,6 @@
     });
 
     window.__TAURI__.event.listen('metrics_updated', () => {
-      // Reload stats periodically or when metrics change
       loadState();
     });
   }
