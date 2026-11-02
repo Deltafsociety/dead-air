@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# DEADAIR // Android APK Build Script
+# DEADAIR // Android APK Build Script (Signed & Aligned)
 echo "=========================================="
 echo "  DEADAIR Mobile (Tauri v2 Android Build) "
 echo "=========================================="
@@ -29,9 +29,15 @@ if [ -z "${NDK_HOME:-}" ]; then
   fi
 fi
 
-# Ensure Rust target installed
+# Locate build-tools (zipalign & apksigner)
+BUILD_TOOLS_DIR=$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1 || true)
+if [ -z "$BUILD_TOOLS_DIR" ]; then
+  echo "[-] Warning: Android build-tools not found under $ANDROID_HOME/build-tools"
+fi
+
+# Ensure Rust Android targets installed
 echo "[+] Ensuring Rust Android targets are installed..."
-rustup target add aarch64-linux-android || true
+rustup target add aarch64-linux-android armv7-linux-androideabi || true
 
 cd "$(dirname "$0")/../gui"
 
@@ -41,18 +47,71 @@ if [ ! -d "src-tauri/gen/android" ]; then
   pnpm dlx @tauri-apps/cli android init --ci
 fi
 
-# Build release APK
-echo "[+] Compiling release Android APK..."
-pnpm dlx @tauri-apps/cli android build --apk --target aarch64 --ci
-
-APK_PATH=$(find src-tauri/gen/android -name "*.apk" 2>/dev/null | grep -E "(release|universal)" | head -n 1 || true)
-if [ -n "$APK_PATH" ]; then
-  mkdir -p ../dist
-  cp "$APK_PATH" ../dist/deadair-android.apk
-  echo "=========================================="
-  echo "[+] SUCCESS: APK built successfully at:"
-  echo "    dist/deadair-android.apk"
-  echo "=========================================="
-else
-  echo "[+] Build complete. Look in gui/src-tauri/gen/android for APK outputs."
+# Ensure network permissions in AndroidManifest.xml
+MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
+if [ -f "$MANIFEST" ]; then
+  if ! grep -q "CHANGE_WIFI_MULTICAST_STATE" "$MANIFEST"; then
+    echo "[+] Adding domestic Wi-Fi & UDP multicast permissions to AndroidManifest.xml..."
+    sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />' "$MANIFEST"
+  fi
 fi
+
+# Build APKs
+echo "[+] Compiling Android APKs (aarch64 + armv7)..."
+pnpm dlx @tauri-apps/cli android build --apk --target aarch64,armv7 --ci
+
+# Locate raw built APK
+RAW_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" 2>/dev/null | head -n 1 || true)
+
+if [ -z "$RAW_APK" ]; then
+  echo "[-] Error: No APK found after build in src-tauri/gen/android/app/build/outputs/apk"
+  exit 1
+fi
+
+echo "[+] Found raw APK: $RAW_APK"
+mkdir -p ../dist
+
+# Align and Sign APK if build-tools available
+if [ -n "$BUILD_TOOLS_DIR" ] && [ -x "$BUILD_TOOLS_DIR/apksigner" ]; then
+  echo "[+] Generating local signing key (if not present)..."
+  if [ ! -f "release.keystore" ]; then
+    keytool -genkeypair -v \
+      -keystore release.keystore \
+      -alias deadair \
+      -keyalg RSA \
+      -keysize 2048 \
+      -validity 10000 \
+      -storepass deadairpass \
+      -keypass deadairpass \
+      -dname "CN=DEADAIR, OU=Mobile, O=deltafsociety, L=Tehran, C=IR"
+  fi
+
+  echo "[+] Zip-aligning APK..."
+  if [ -x "$BUILD_TOOLS_DIR/zipalign" ]; then
+    "$BUILD_TOOLS_DIR/zipalign" -v -p -f 4 "$RAW_APK" aligned.apk
+    TARGET_FOR_SIGN="aligned.apk"
+  else
+    TARGET_FOR_SIGN="$RAW_APK"
+  fi
+
+  echo "[+] Signing APK with APK Signature Scheme v2/v3..."
+  "$BUILD_TOOLS_DIR/apksigner" sign \
+    --ks release.keystore \
+    --ks-pass pass:deadairpass \
+    --key-pass pass:deadairpass \
+    --out ../dist/deadair-android.apk \
+    "$TARGET_FOR_SIGN"
+
+  echo "[+] Verifying APK signature..."
+  "$BUILD_TOOLS_DIR/apksigner" verify --verbose ../dist/deadair-android.apk
+
+  rm -f aligned.apk
+else
+  echo "[!] Warning: apksigner not found, copying raw APK directly"
+  cp "$RAW_APK" ../dist/deadair-android.apk
+fi
+
+echo "=========================================="
+echo "[+] SUCCESS: Valid signed APK ready at:"
+echo "    dist/deadair-android.apk"
+echo "=========================================="
