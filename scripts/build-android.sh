@@ -43,7 +43,7 @@ fi
 
 # Build release APK
 echo "[+] Compiling release Android APK..."
-pnpm dlx @tauri-apps/cli android build --apk --target aarch64-linux-android
+pnpm dlx @tauri-apps/cli android build --apk --target aarch64 --ci
 
 APK_PATH=$(find src-tauri/gen/android -name "*.apk" 2>/dev/null | grep -E "(release|universal)" | head -n 1 || true)
 if [ -n "$APK_PATH" ]; then

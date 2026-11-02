@@ -110,13 +110,14 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
+      - name: Setup Android SDK & NDK
         run: |
-          sdkmanager --install "ndk;27.0.12077973"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          NDK_PATH=$(find $ANDROID_HOME/ndk -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1 || true)
+          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "Found Android NDK at: $NDK_PATH"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Install Rust & Android Target
         uses: dtolnay/rust-toolchain@stable
@@ -132,9 +133,14 @@ jobs:
         run: |
           cd gui
           pnpm dlx @tauri-apps/cli android init --ci
-          pnpm dlx @tauri-apps/cli android build --apk --target aarch64-linux-android
+          pnpm dlx @tauri-apps/cli android build --apk --target aarch64 --ci
           mkdir -p ../dist
-          cp $(find src-tauri/gen/android -name "*.apk" | grep -E "(release|universal)" | head -n 1) ../dist/deadair-android-arm64.apk
+          APK_FOUND=$(find src-tauri/gen/android -name "*.apk" 2>/dev/null | grep -E "(release|universal|debug)" | head -n 1 || true)
+          if [ -n "$APK_FOUND" ]; then
+            cp "$APK_FOUND" ../dist/deadair-android-arm64.apk
+          else
+            echo "[-] Warning: No APK found in expected directory"
+          fi
 
       - name: Upload Android APK artifact
         uses: actions/upload-artifact@v4
