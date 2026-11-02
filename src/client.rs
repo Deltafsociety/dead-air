@@ -159,3 +159,16 @@ async fn relay_worker(
         tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn test_tls_crypto_provider_installed() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+
+        // Attempting to initiate a TLS connection to an invalid port should fail gracefully with Err, NOT panic
+        let res = tokio_tungstenite::connect_async("wss://127.0.0.1:9").await;
+        assert!(res.is_err());
+    }
+}
