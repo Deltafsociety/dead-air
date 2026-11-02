@@ -23,11 +23,11 @@ struct Subscription {
 pub struct RelayStore {
     events: Arc<RwLock<Vec<Event>>>,
     subs: Arc<RwLock<HashMap<usize, Subscription>>>,
-    inbound_event_tx: mpsc::UnboundedSender<Event>,
+    inbound_event_tx: mpsc::UnboundedSender<(Event, String)>,
 }
 
 impl RelayStore {
-    pub fn new(inbound_event_tx: mpsc::UnboundedSender<Event>) -> Self {
+    pub fn new(inbound_event_tx: mpsc::UnboundedSender<(Event, String)>) -> Self {
         Self {
             events: Arc::new(RwLock::new(Vec::with_capacity(1000))),
             subs: Arc::new(RwLock::new(HashMap::new())),
@@ -51,7 +51,7 @@ impl RelayStore {
         events.push(event.clone());
         drop(events);
 
-        let _ = self.inbound_event_tx.send(event.clone());
+        let _ = self.inbound_event_tx.send((event.clone(), "embedded".to_string()));
         self.broadcast_event(&event).await;
 
         Ok(true)
@@ -112,7 +112,7 @@ pub struct EmbeddedRelay {
 }
 
 impl EmbeddedRelay {
-    pub async fn start(port: u16, inbound_event_tx: mpsc::UnboundedSender<Event>) -> Result<(Self, RelayStore), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn start(port: u16, inbound_event_tx: mpsc::UnboundedSender<(Event, String)>) -> Result<(Self, RelayStore), Box<dyn std::error::Error + Send + Sync>> {
         let addr: SocketAddr = format!("0.0.0.0:{}", port).parse()?;
         let listener = TcpListener::bind(addr).await?;
         let actual_addr = listener.local_addr()?;

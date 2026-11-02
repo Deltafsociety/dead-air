@@ -20,11 +20,11 @@ pub struct RelayStatus {
 pub struct ClientPool {
     relays: Arc<RwLock<HashMap<String, RelayStatus>>>,
     publish_broadcast_tx: tokio::sync::broadcast::Sender<Event>,
-    inbound_event_tx: mpsc::UnboundedSender<Event>,
+    inbound_event_tx: mpsc::UnboundedSender<(Event, String)>,
 }
 
 impl ClientPool {
-    pub fn new(inbound_event_tx: mpsc::UnboundedSender<Event>) -> Self {
+    pub fn new(inbound_event_tx: mpsc::UnboundedSender<(Event, String)>) -> Self {
         let (publish_broadcast_tx, _) = tokio::sync::broadcast::channel(256);
         Self {
             relays: Arc::new(RwLock::new(HashMap::new())),
@@ -70,7 +70,7 @@ impl ClientPool {
 async fn relay_worker(
     url: String,
     relays_map: Arc<RwLock<HashMap<String, RelayStatus>>>,
-    inbound_tx: mpsc::UnboundedSender<Event>,
+    inbound_tx: mpsc::UnboundedSender<(Event, String)>,
     mut publish_rx: tokio::sync::broadcast::Receiver<Event>,
 ) {
     loop {
@@ -122,7 +122,7 @@ async fn relay_worker(
                                         if let Ok(relay_msg) = RelayMessage::from_json(text) {
                                             if let RelayMessage::Event { event, .. } = relay_msg {
                                                 let ev = event.into_owned();
-                                                let _ = inbound_tx.send(ev);
+                                                let _ = inbound_tx.send((ev, url.clone()));
                                                 let mut map = relays_map.write().await;
                                                 if let Some(st) = map.get_mut(&url) {
                                                     st.events_received += 1;

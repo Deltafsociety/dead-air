@@ -4,7 +4,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::app::{App, InputMode};
+use crate::app::{ActiveTab, App, InputMode};
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -97,28 +97,83 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
         Color::DarkGray
     };
 
+    let (active_events, is_station_tab) = match app.active_tab {
+        ActiveTab::Station => (&app.timeline, true),
+        ActiveTab::Public => (&app.public_timeline, false),
+    };
+
+    let (station_style, public_style) = match app.active_tab {
+        ActiveTab::Station => (
+            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::DarkGray),
+        ),
+        ActiveTab::Public => (
+            Style::default().fg(Color::DarkGray),
+            Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ),
+    };
+
+    let station_badge = Span::styled(
+        format!(" [1] DEADAIR Station ({}) ", app.timeline.len()),
+        station_style,
+    );
+
+    let public_badge = Span::styled(
+        format!(" [2] Public Mesh ({}) ", app.public_timeline.len()),
+        public_style,
+    );
+
+    let nav_hint = Span::styled(
+        " [Tab / 1-2 to switch] ",
+        Style::default().fg(Color::DarkGray),
+    );
+
     let block = Block::default()
-        .title(format!(" Local Timeline ({} events) ", app.timeline.len()))
+        .title(Line::from(vec![
+            Span::raw(" "),
+            station_badge,
+            Span::raw(" "),
+            public_badge,
+            Span::raw(" "),
+            nav_hint,
+        ]))
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
 
-    if app.timeline.is_empty() {
-        let empty_msg = Paragraph::new(vec![
-            Line::from(""),
-            Line::from(Span::styled("No transmissions yet.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("Type a note below and hit [Enter] to broadcast.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("Type /share to see your domestic address for friends.", Style::default().fg(Color::DarkGray))),
-        ])
-        .alignment(Alignment::Center)
-        .block(block);
+    if active_events.is_empty() {
+        let empty_lines = if is_station_tab {
+            vec![
+                Line::from(""),
+                Line::from(Span::styled("No DEADAIR station transmissions yet.", Style::default().fg(Color::DarkGray))),
+                Line::from(Span::styled("This feed only displays notes from DEADAIR peers and domestic relays.", Style::default().fg(Color::DarkGray))),
+                Line::from(Span::styled("Type a note below and hit [Enter] to broadcast to your network.", Style::default().fg(Color::DarkGray))),
+                Line::from(Span::styled("Type /share to see your domestic station address for peers.", Style::default().fg(Color::DarkGray))),
+            ]
+        } else {
+            vec![
+                Line::from(""),
+                Line::from(Span::styled("No public relay transmissions received yet.", Style::default().fg(Color::DarkGray))),
+                if !app.public_relays_active {
+                    Line::from(Span::styled("Public internet mesh is currently OFF. Press [p] or type /relay public to connect.", Style::default().fg(Color::Yellow)))
+                } else {
+                    Line::from(Span::styled("Connecting to Damus, nos.lol, and Primal... waiting for notes.", Style::default().fg(Color::Cyan)))
+                },
+                Line::from(""),
+                Line::from(Span::styled("Press [Tab] or [1] to return to your domestic DEADAIR Station tab.", Style::default().fg(Color::DarkGray))),
+            ]
+        };
+
+        let empty_msg = Paragraph::new(empty_lines)
+            .alignment(Alignment::Center)
+            .block(block);
         f.render_widget(empty_msg, area);
         return;
     }
 
     let mut list_items = Vec::new();
-    for event in app.timeline.iter() {
+    for event in active_events.iter() {
         let is_self = event.pubkey == app.identity.keys.public_key();
         let display_name = app.profiles.get(&event.pubkey).cloned().unwrap_or_else(|| {
             let full_hex = event.pubkey.to_hex();
@@ -127,16 +182,25 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
 
         let (author_str, author_color) = if is_self {
             (format!("YOU [{}]", display_name), Color::Green)
-        } else {
+        } else if is_station_tab {
             (format!("* {}", display_name), Color::Yellow)
+        } else {
+            (format!("~ {}", display_name), Color::Cyan)
         };
 
         let time_str = format_timestamp(event.created_at.as_secs());
+
+        let badge = if is_station_tab {
+            Span::styled(" [STATION] ", Style::default().fg(Color::Green))
+        } else {
+            Span::styled(" [PUBLIC] ", Style::default().fg(Color::DarkGray))
+        };
 
         let header = Line::from(vec![
             Span::styled(format!("[{}] ", time_str), Style::default().fg(Color::DarkGray)),
             Span::styled(author_str, Style::default().fg(author_color).add_modifier(Modifier::BOLD)),
             Span::styled(format!(" (id: {}..)", &event.id.to_hex()[..8]), Style::default().fg(Color::DarkGray)),
+            badge,
         ]);
 
         let mut lines = vec![header];
@@ -233,6 +297,13 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
 
     let info_lines = vec![
         Line::from(vec![
+            Span::styled("Active Tab: ", Style::default().fg(Color::DarkGray)),
+            match app.active_tab {
+                ActiveTab::Station => Span::styled("DEADAIR Station ([Tab] switch)", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                ActiveTab::Public => Span::styled("Public Relays ([Tab] switch)", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            },
+        ]),
+        Line::from(vec![
             Span::styled("Handle: ", Style::default().fg(Color::DarkGray)),
             Span::styled(app.identity.name.clone(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         ]),
@@ -257,7 +328,7 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(format!("{} pending", app.outbox.len()), Style::default().fg(Color::Yellow)),
         ]),
         Line::from(""),
-        Line::from(Span::styled("Commands: /share | /bookmark add <url> [name]", Style::default().fg(Color::Cyan))),
+        Line::from(Span::styled("Commands: /tab [station|public] | /share | /clear", Style::default().fg(Color::Cyan))),
     ];
 
     let info_widget = Paragraph::new(info_lines).block(info_block);
@@ -271,10 +342,19 @@ fn render_input(f: &mut Frame, app: &App, area: Rect) {
         (Color::DarkGray, " >  ")
     };
 
-    let title = if app.input_mode == InputMode::Editing {
-        " Broadcasting (Enter to transmit, /share for address, Esc for nav) "
-    } else {
-        " Note Buffer (Press [i] or [Enter] to write) "
+    let title = match (app.input_mode, app.active_tab) {
+        (InputMode::Editing, ActiveTab::Station) => {
+            " Broadcasting to DEADAIR Station (Enter to transmit, Esc for nav) "
+        }
+        (InputMode::Editing, ActiveTab::Public) => {
+            " Broadcasting note (DEADAIR signed, Enter to transmit, Esc for nav) "
+        }
+        (InputMode::Normal, ActiveTab::Station) => {
+            " Station Chat (Press [i] or [Enter] to write, [Tab] for public mesh) "
+        }
+        (InputMode::Normal, ActiveTab::Public) => {
+            " Public Mesh (Press [i] or [Enter] to write, [Tab] for station chat) "
+        }
     };
 
     let block = Block::default()
@@ -297,16 +377,20 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         ])
     } else {
         Line::from(vec![
-            Span::styled(" [i/Enter]", Style::default().fg(Color::Cyan)),
+            Span::styled(" [Tab/1-2]", Style::default().fg(Color::Cyan)),
+            Span::styled(" Tabs  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[i/Enter]", Style::default().fg(Color::Cyan)),
             Span::styled(" Write  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[s]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Share Address  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Share  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[b]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Connect Bookmarks  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Bookmarks  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[r]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Toggle Relay  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Relay  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[p]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Public Relays  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Public  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[c]", Style::default().fg(Color::Cyan)),
+            Span::styled(" Clear  ", Style::default().fg(Color::DarkGray)),
             Span::styled("[q]", Style::default().fg(Color::Cyan)),
             Span::styled(" Quit", Style::default().fg(Color::DarkGray)),
         ])

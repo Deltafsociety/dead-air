@@ -88,6 +88,8 @@ cargo build --release
 ### Command and Shortcut Reference
 
 #### Interactive Commands
+* `/tab [station|public]`: Switch between DEADAIR station chat and public relays mesh.
+* `/clear`: Clear timeline messages in the active tab.
 * `/name <nick>`: Set your display handle and publish your profile.
 * `/share`: Output your domestic connection string and handle.
 * `/ip`: Re-run domestic network IP detection.
@@ -101,14 +103,16 @@ cargo build --release
 #### Keyboard Controls
 | Key | Action |
 | :--- | :--- |
+| `Tab` or `t` | Switch between DEADAIR Station and Public Relays tabs |
+| `1` or `2` | Jump directly to Station tab (`1`) or Public Mesh tab (`2`) |
 | `i` or `Enter` | Enter compose mode |
 | `Enter` (in compose) | Broadcast message or execute command |
-| `Esc` or `Tab` | Switch between write mode and navigation mode |
+| `Esc` | Exit write mode to navigation mode |
 | `s` | Display domestic share address |
 | `b` | Reconnect all saved domestic bookmarks |
 | `r` or `F2` | Toggle embedded relay (`0.0.0.0:4869`) |
 | `p` | Toggle global public relays |
-| `c` | Clear the timeline screen |
+| `c` | Clear the active timeline tab |
 | `q` or `Ctrl+C` | Exit DEADAIR |
 
 ---

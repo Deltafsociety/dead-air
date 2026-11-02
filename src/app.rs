@@ -21,6 +21,12 @@ pub const DEFAULT_PUBLIC_RELAYS: &[&str] = &[
     "wss://relay.primal.net",
 ];
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum ActiveTab {
+    Station,
+    Public,
+}
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum InputMode {
     Normal,
@@ -38,7 +44,9 @@ pub struct App {
     pub bookmarks: BookmarkManager,
     pub detected_ip: String,
     pub share_address: String,
+    pub active_tab: ActiveTab,
     pub timeline: Vec<Event>,
+    pub public_timeline: Vec<Event>,
     pub profiles: HashMap<PublicKey, String>,
     pub discovered_peers: Vec<PeerNode>,
     pub relay_statuses: Vec<RelayStatus>,
@@ -47,8 +55,8 @@ pub struct App {
     pub input_mode: InputMode,
     pub status_toast: Option<(String, Instant)>,
     pub should_quit: bool,
-    inbound_event_tx: mpsc::UnboundedSender<Event>,
-    inbound_event_rx: mpsc::UnboundedReceiver<Event>,
+    inbound_event_tx: mpsc::UnboundedSender<(Event, String)>,
+    inbound_event_rx: mpsc::UnboundedReceiver<(Event, String)>,
     peer_rx: mpsc::UnboundedReceiver<PeerNode>,
     ip_rx: mpsc::UnboundedReceiver<(String, String)>,
     ip_tx: mpsc::UnboundedSender<(String, String)>,
@@ -59,7 +67,7 @@ impl App {
         let identity = Identity::load_or_create()?;
         let relay_port = 4869;
 
-        let (inbound_event_tx, inbound_event_rx) = mpsc::unbounded_channel::<Event>();
+        let (inbound_event_tx, inbound_event_rx) = mpsc::unbounded_channel::<(Event, String)>();
         let (peer_tx, peer_rx) = mpsc::unbounded_channel::<PeerNode>();
         let (ip_tx, ip_rx) = mpsc::unbounded_channel::<(String, String)>();
 
@@ -110,7 +118,9 @@ impl App {
             bookmarks,
             detected_ip: initial_ip,
             share_address: initial_share,
+            active_tab: ActiveTab::Station,
             timeline: Vec::new(),
+            public_timeline: Vec::new(),
             profiles,
             discovered_peers: Vec::new(),
             relay_statuses: Vec::new(),
@@ -142,7 +152,7 @@ impl App {
             ));
         }
 
-        while let Ok(event) = self.inbound_event_rx.try_recv() {
+        while let Ok((event, source_url)) = self.inbound_event_rx.try_recv() {
             if event.kind == Kind::Metadata {
                 if let Ok(meta) = Metadata::from_json(&event.content) {
                     if let Some(name) = meta.name.or(meta.display_name) {
@@ -150,10 +160,23 @@ impl App {
                     }
                 }
             } else if event.kind == Kind::TextNote {
-                if !self.timeline.iter().any(|e| e.id == event.id) {
-                    self.outbox.remove(&event.id);
-                    self.timeline.push(event);
-                    self.timeline.sort_by_key(|e| e.created_at);
+                self.outbox.remove(&event.id);
+                if self.is_deadair_event(&event, Some(&source_url)) {
+                    if !self.timeline.iter().any(|e| e.id == event.id) {
+                        self.timeline.push(event);
+                        self.timeline.sort_by_key(|e| e.created_at);
+                        if self.timeline.len() > 1000 {
+                            self.timeline.remove(0);
+                        }
+                    }
+                } else {
+                    if !self.public_timeline.iter().any(|e| e.id == event.id) {
+                        self.public_timeline.push(event);
+                        self.public_timeline.sort_by_key(|e| e.created_at);
+                        if self.public_timeline.len() > 1000 {
+                            self.public_timeline.remove(0);
+                        }
+                    }
                 }
             }
         }
@@ -179,6 +202,43 @@ impl App {
         }
     }
 
+    pub fn is_deadair_event(&self, event: &Event, source_url: Option<&str>) -> bool {
+        // 1. Authored by the local user
+        if event.pubkey == self.identity.keys.public_key() {
+            return true;
+        }
+
+        // 2. Contains standard DEADAIR client tag
+        let has_deadair_tag = event.tags.iter().any(|t| {
+            let slice = t.as_slice();
+            slice.len() >= 2 && slice[0].eq_ignore_ascii_case("client") && slice[1].eq_ignore_ascii_case("deadair")
+        });
+        if has_deadair_tag {
+            return true;
+        }
+
+        // 3. Authored by a known LAN peer discovered via UDP beacon
+        if self.discovered_peers.iter().any(|p| {
+            p.name == event.pubkey.to_hex()
+                || self.profiles.get(&event.pubkey).map_or(false, |name| name == &p.name)
+        }) {
+            return true;
+        }
+
+        // 4. Delivered from domestic/embedded source (embedded relay, localhost, or domestic bookmark)
+        if let Some(url) = source_url {
+            if url == "embedded" || url.contains("127.0.0.1") || url.contains("localhost") {
+                return true;
+            }
+            let is_public = DEFAULT_PUBLIC_RELAYS.iter().any(|&pub_url| url == pub_url);
+            if !is_public {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub async fn handle_key(&mut self, key: KeyEvent) {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.should_quit = true;
@@ -194,10 +254,38 @@ impl App {
                 KeyCode::Char('b') => self.connect_bookmarks().await,
                 KeyCode::Char('s') => self.show_share_toast(),
                 KeyCode::Char('c') => {
-                    self.timeline.clear();
-                    self.status_toast = Some(("Feed cleared".to_string(), Instant::now()));
+                    match self.active_tab {
+                        ActiveTab::Station => {
+                            self.timeline.clear();
+                            self.status_toast = Some(("Station feed cleared".to_string(), Instant::now()));
+                        }
+                        ActiveTab::Public => {
+                            self.public_timeline.clear();
+                            self.status_toast = Some(("Public feed cleared".to_string(), Instant::now()));
+                        }
+                    }
                 }
-                KeyCode::Tab => self.input_mode = InputMode::Editing,
+                KeyCode::Tab | KeyCode::Char('t') => {
+                    self.active_tab = match self.active_tab {
+                        ActiveTab::Station => ActiveTab::Public,
+                        ActiveTab::Public => ActiveTab::Station,
+                    };
+                    self.status_toast = Some((
+                        format!("Switched to {} tab", match self.active_tab {
+                            ActiveTab::Station => "DEADAIR Station",
+                            ActiveTab::Public => "Public Relays",
+                        }),
+                        Instant::now(),
+                    ));
+                }
+                KeyCode::Char('1') | KeyCode::Left => {
+                    self.active_tab = ActiveTab::Station;
+                    self.status_toast = Some(("Switched to DEADAIR Station tab".to_string(), Instant::now()));
+                }
+                KeyCode::Char('2') | KeyCode::Right => {
+                    self.active_tab = ActiveTab::Public;
+                    self.status_toast = Some(("Switched to Public Relays tab".to_string(), Instant::now()));
+                }
                 _ => {}
             },
             InputMode::Editing => match key.code {
@@ -227,7 +315,11 @@ impl App {
             return;
         }
 
-        let event = match EventBuilder::new(Kind::TextNote, &text).finalize(&self.identity.keys) {
+        let deadair_tag = Tag::parse(["client", "deadair"]).unwrap_or_else(|_| Tag::hashtag("deadair"));
+        let event = match EventBuilder::new(Kind::TextNote, &text)
+            .tag(deadair_tag)
+            .finalize(&self.identity.keys)
+        {
             Ok(ev) => ev,
             Err(_) => return,
         };
@@ -243,7 +335,7 @@ impl App {
             self.outbox.push(event.clone());
             self.status_toast = Some(("Saved to offline outbox".to_string(), Instant::now()));
         } else {
-            self.status_toast = Some(("Transmitted note".to_string(), Instant::now()));
+            self.status_toast = Some(("Transmitted note to network".to_string(), Instant::now()));
         }
 
         if !self.timeline.iter().any(|e| e.id == event.id) {
@@ -274,6 +366,39 @@ impl App {
                     let _ = ip_tx_spawn.send(res);
                 });
                 self.status_toast = Some(("Detecting domestic network address...".to_string(), Instant::now()));
+            }
+            ["/tab"] => {
+                self.active_tab = match self.active_tab {
+                    ActiveTab::Station => ActiveTab::Public,
+                    ActiveTab::Public => ActiveTab::Station,
+                };
+                self.status_toast = Some((
+                    format!("Switched to {} tab", match self.active_tab {
+                        ActiveTab::Station => "DEADAIR Station",
+                        ActiveTab::Public => "Public Relays",
+                    }),
+                    Instant::now(),
+                ));
+            }
+            ["/station"] | ["/tab", "station"] | ["/tab", "1"] | ["/local"] => {
+                self.active_tab = ActiveTab::Station;
+                self.status_toast = Some(("Switched to DEADAIR Station tab".to_string(), Instant::now()));
+            }
+            ["/public"] | ["/tab", "public"] | ["/tab", "2"] | ["/global"] => {
+                self.active_tab = ActiveTab::Public;
+                self.status_toast = Some(("Switched to Public Relays tab".to_string(), Instant::now()));
+            }
+            ["/clear"] => {
+                match self.active_tab {
+                    ActiveTab::Station => {
+                        self.timeline.clear();
+                        self.status_toast = Some(("Station feed cleared".to_string(), Instant::now()));
+                    }
+                    ActiveTab::Public => {
+                        self.public_timeline.clear();
+                        self.status_toast = Some(("Public feed cleared".to_string(), Instant::now()));
+                    }
+                }
             }
             ["/bookmark", "add", url] => {
                 let name = format!("node-{}", &url[url.len().saturating_sub(6)..]);
@@ -306,7 +431,7 @@ impl App {
                 self.toggle_public_relays().await;
             }
             ["/help"] => {
-                self.status_toast = Some(("Commands: /share | /name <nick> | /bookmark add <url> [name] | /relay public".to_string(), Instant::now()));
+                self.status_toast = Some(("Commands: /tab [station|public] | /share | /name <nick> | /bookmark add <url> [name] | /relay public | /clear".to_string(), Instant::now()));
             }
             _ => {
                 self.status_toast = Some(("Unknown command. Type /help".to_string(), Instant::now()));
@@ -339,7 +464,7 @@ impl App {
             for &relay in DEFAULT_PUBLIC_RELAYS {
                 self.client_pool.add_relay(relay.to_string());
             }
-            self.status_toast = Some(("Connecting to public internet relays...".to_string(), Instant::now()));
+            self.status_toast = Some(("Public relays active (viewing in [2] Public Relays tab)".to_string(), Instant::now()));
         } else {
             self.status_toast = Some(("Public internet relays disabled".to_string(), Instant::now()));
         }
@@ -391,5 +516,61 @@ impl App {
             }
             self.client_pool.publish(ev);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_event_classification_and_tagging() {
+        let app = App::new().await.expect("App should initialize");
+
+        // 1. Local event authored by user
+        let my_event = EventBuilder::new(Kind::TextNote, "hello from me")
+            .finalize(&app.identity.keys)
+            .unwrap();
+        assert!(app.is_deadair_event(&my_event, Some("wss://relay.damus.io")));
+
+        // 2. Foreign event with client=deadair tag
+        let other_keys = Keys::generate();
+        let tag = Tag::parse(["client", "deadair"]).unwrap();
+        let deadair_foreign_event = EventBuilder::new(Kind::TextNote, "hello from deadair friend")
+            .tag(tag)
+            .finalize(&other_keys)
+            .unwrap();
+        assert!(app.is_deadair_event(&deadair_foreign_event, Some("wss://relay.damus.io")));
+
+        // 3. Foreign event from domestic/embedded relay without deadair tag
+        let domestic_foreign_event = EventBuilder::new(Kind::TextNote, "domestic lan node")
+            .finalize(&other_keys)
+            .unwrap();
+        assert!(app.is_deadair_event(&domestic_foreign_event, Some("embedded")));
+        assert!(app.is_deadair_event(&domestic_foreign_event, Some("ws://127.0.0.1:4869")));
+        assert!(app.is_deadair_event(&domestic_foreign_event, Some("ws://192.168.1.50:4869")));
+
+        // 4. Foreign event from public internet relay without deadair tag
+        let public_event = EventBuilder::new(Kind::TextNote, "global public nostr tweet")
+            .finalize(&other_keys)
+            .unwrap();
+        assert!(!app.is_deadair_event(&public_event, Some("wss://relay.damus.io")));
+        assert!(!app.is_deadair_event(&public_event, Some("wss://nos.lol")));
+        assert!(!app.is_deadair_event(&public_event, Some("wss://relay.primal.net")));
+    }
+
+    #[tokio::test]
+    async fn test_tab_switching_command() {
+        let mut app = App::new().await.expect("App should initialize");
+        assert_eq!(app.active_tab, ActiveTab::Station);
+
+        app.handle_command("/tab public").await;
+        assert_eq!(app.active_tab, ActiveTab::Public);
+
+        app.handle_command("/tab station").await;
+        assert_eq!(app.active_tab, ActiveTab::Station);
+
+        app.handle_command("/tab").await;
+        assert_eq!(app.active_tab, ActiveTab::Public);
     }
 }
