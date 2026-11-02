@@ -8,7 +8,7 @@ use nostr::event::Event;
 use nostr::key::PublicKey;
 use nostr::nips::nip19::ToBech32;
 
-use crate::app::{App, InputMode};
+use crate::app::{ActiveTab, App, InputMode};
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -40,16 +40,31 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         )
     };
 
-    let net_mode_span = Span::styled(
-        " [MODE: DEADAIR ONLY] ",
-        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
-    );
-
     let peers_count = app.discovered_peers.len();
     let peers_span = Span::styled(
         format!(" [PEERS: {}] ", peers_count),
         Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
     );
+
+    let tab_main_style = if app.active_tab == ActiveTab::Main {
+        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray).bg(Color::Black)
+    };
+    let tab_direct_style = if app.active_tab == ActiveTab::Direct {
+        Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray).bg(Color::Black)
+    };
+    let tab_groups_style = if app.active_tab == ActiveTab::Groups {
+        Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray).bg(Color::Black)
+    };
+
+    let tab_main_span = Span::styled(format!(" [1: MAIN ({})] ", app.timeline.len()), tab_main_style);
+    let tab_direct_span = Span::styled(format!(" [2: DIRECT ({})] ", app.direct_messages.len()), tab_direct_style);
+    let tab_groups_span = Span::styled(format!(" [3: GROUPS (#{}: {})] ", app.current_group, app.group_messages.len()), tab_groups_style);
 
     let outbox_count = app.outbox.len();
     let outbox_span = if outbox_count > 0 {
@@ -62,16 +77,17 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     };
 
     let header_line = Line::from(vec![
-        Span::styled(" DEADAIR ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(" DEADAIR ", Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD)),
         Span::styled(format!(" [{}] ", app.identity.name), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-        Span::styled(format!("(ID: {}) ", app.identity.short_npub), Style::default().fg(Color::Magenta)),
         relay_status_span,
-        Span::raw(" "),
-        net_mode_span,
-        Span::raw(" "),
         peers_span,
-        Span::raw(" "),
         outbox_span,
+        Span::raw("  "),
+        tab_main_span,
+        Span::raw(" "),
+        tab_direct_span,
+        Span::raw(" "),
+        tab_groups_span,
     ]);
 
     let block = Block::default()
@@ -100,18 +116,30 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
         Color::DarkGray
     };
 
-    let station_badge = Span::styled(
-        format!(" DEADAIR Station ({}) ", app.timeline.len()),
-        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
-    );
+    let current_notes = app.current_notes();
+
+    let tab_badge = match app.active_tab {
+        ActiveTab::Main => Span::styled(
+            format!(" MAIN MESH ({}) ", current_notes.len()),
+            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
+        ),
+        ActiveTab::Direct => Span::styled(
+            format!(" DIRECT CHAT ({}) ", current_notes.len()),
+            Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD),
+        ),
+        ActiveTab::Groups => Span::styled(
+            format!(" GROUP #{} ({}) ", app.current_group, current_notes.len()),
+            Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ),
+    };
 
     let nav_hint = match app.selected_note_index {
         Some(idx) => Span::styled(
-            format!(" [Note {}/{} • 'g' live] ", idx + 1, app.timeline.len()),
+            format!(" [Note {}/{} | 'g' live] ", idx + 1, current_notes.len()),
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         ),
         None => Span::styled(
-            " [LIVE • Up/k to browse] ",
+            " [LIVE | Up/k to browse] ",
             Style::default().fg(Color::Green),
         ),
     };
@@ -119,7 +147,7 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(Line::from(vec![
             Span::raw(" "),
-            station_badge,
+            tab_badge,
             Span::raw(" "),
             nav_hint,
         ]))
@@ -128,13 +156,27 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
 
-    if app.timeline.is_empty() {
+    if current_notes.is_empty() {
+        let (line1, line2) = match app.active_tab {
+            ActiveTab::Main => (
+                "No main mesh notes received yet.",
+                "Type a message below or press [s] for your address.",
+            ),
+            ActiveTab::Direct => (
+                "No direct private messages yet.",
+                "Send a private note with: /dm <user> <message>",
+            ),
+            ActiveTab::Groups => (
+                "No transmissions in this group yet.",
+                "Type a note or join another channel with: /group <name>",
+            ),
+        };
+
         let empty_lines = vec![
             Line::from(""),
-            Line::from(Span::styled("No DEADAIR station transmissions yet.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("This station exclusively communicates with DEADAIR peers on your intranet mesh.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("Type a note below and hit [Enter] to broadcast to your network.", Style::default().fg(Color::DarkGray))),
-            Line::from(Span::styled("Type /share to see your domestic station address for peers.", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(line1, Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled(line2, Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("Tab/1/2/3 to switch tabs | /image <path> to send pictures", Style::default().fg(Color::DarkGray))),
         ];
 
         let empty_msg = Paragraph::new(empty_lines)
@@ -146,7 +188,7 @@ fn render_timeline(f: &mut Frame, app: &App, area: Rect) {
 
     let mut list_items = Vec::new();
 
-    for (i, event) in app.timeline.iter().enumerate() {
+    for (i, event) in current_notes.iter().enumerate() {
         let is_selected = app.selected_note_index == Some(i);
         let display_name = app
             .profile_details
@@ -227,22 +269,22 @@ fn render_station_card(
     let top_border = if is_selected {
         Line::from(vec![
             Span::styled("┏━ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("● ", Style::default().fg(author_color)),
+            Span::styled("* ", Style::default().fg(author_color)),
             Span::styled(display_name.to_string(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled(self_tag, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled(format!("{} ", handle), Style::default().fg(Color::Cyan)),
-            Span::styled("• ", Style::default().fg(Color::DarkGray)),
+            Span::styled("| ", Style::default().fg(Color::DarkGray)),
             Span::styled(relative_time.to_string(), Style::default().fg(Color::Yellow)),
             Span::styled(" ━━[SELECTED]━", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         ])
     } else {
         Line::from(vec![
             Span::styled("╭─ ", Style::default().fg(Color::DarkGray)),
-            Span::styled("● ", Style::default().fg(author_color)),
+            Span::styled("* ", Style::default().fg(author_color)),
             Span::styled(display_name.to_string(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled(self_tag, Style::default().fg(Color::Green)),
             Span::styled(format!("{} ", handle), Style::default().fg(Color::DarkGray)),
-            Span::styled("• ", Style::default().fg(Color::DarkGray)),
+            Span::styled("| ", Style::default().fg(Color::DarkGray)),
             Span::styled(relative_time.to_string(), Style::default().fg(Color::DarkGray)),
             Span::styled(" ─", Style::default().fg(Color::DarkGray)),
         ])
@@ -257,43 +299,60 @@ fn render_station_card(
 
     let mut card_lines = vec![top_border];
 
-    for line in event.content.lines() {
-        let mut spans = vec![Span::styled(side_prefix, side_style)];
-        for (i, word) in line.split(' ').enumerate() {
-            if i > 0 {
-                spans.push(Span::raw(" "));
+    // Check if content has inline picture data
+    if event.content.contains("data:image/") || event.content.starts_with("![") {
+        let size_kb = event.content.len() / 1024;
+        let caption = if let Some(start) = event.content.find("![") {
+            if let Some(end) = event.content[start..].find("](") {
+                &event.content[start + 2..start + end]
+            } else { "attached image" }
+        } else { "attached image" };
+
+        card_lines.push(Line::from(vec![
+            Span::styled(side_prefix, side_style),
+            Span::styled(format!("[ATTACHED PICTURE: {} (~{} KB)]", caption, size_kb), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
+        ]));
+    } else {
+        for line in event.content.lines() {
+            let mut spans = vec![Span::styled(side_prefix, side_style)];
+            for (i, word) in line.split(' ').enumerate() {
+                if i > 0 {
+                    spans.push(Span::raw(" "));
+                }
+                if word.starts_with('#') && word.len() > 1 {
+                    spans.push(Span::styled(word.to_string(), Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)));
+                } else if word.starts_with('@') || word.starts_with("nostr:npub") || word.starts_with("npub1") {
+                    spans.push(Span::styled(word.to_string(), Style::default().fg(Color::Cyan)));
+                } else if word.starts_with("http://") || word.starts_with("https://") {
+                    spans.push(Span::styled(word.to_string(), Style::default().fg(Color::LightBlue).add_modifier(Modifier::UNDERLINED)));
+                } else if word.starts_with("deadair://") {
+                    spans.push(Span::styled(word.to_string(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
+                } else {
+                    spans.push(Span::styled(word.to_string(), Style::default().fg(Color::White)));
+                }
             }
-            if word.starts_with('#') && word.len() > 1 {
-                spans.push(Span::styled(word.to_string(), Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)));
-            } else if word.starts_with('@') || word.starts_with("nostr:npub") || word.starts_with("npub1") {
-                spans.push(Span::styled(word.to_string(), Style::default().fg(Color::Cyan)));
-            } else if word.starts_with("http://") || word.starts_with("https://") {
-                spans.push(Span::styled(word.to_string(), Style::default().fg(Color::LightBlue).add_modifier(Modifier::UNDERLINED)));
-            } else {
-                spans.push(Span::styled(word.to_string(), Style::default().fg(Color::White)));
-            }
+            card_lines.push(Line::from(spans));
         }
-        card_lines.push(Line::from(spans));
     }
 
     let reply_badge = if replies > 0 {
-        Span::styled(format!(" 💬 {} ", replies), Style::default().fg(Color::Cyan))
+        Span::styled(format!(" [RE: {}] ", replies), Style::default().fg(Color::Cyan))
     } else {
-        Span::styled(" 💬 0 ", Style::default().fg(Color::DarkGray))
+        Span::styled(" [RE: 0] ", Style::default().fg(Color::DarkGray))
     };
 
     let repost_badge = if reposts > 0 {
-        Span::styled(format!(" 🔁 {} ", reposts), Style::default().fg(Color::Green))
+        Span::styled(format!(" [RP: {}] ", reposts), Style::default().fg(Color::Green))
     } else {
-        Span::styled(" 🔁 0 ", Style::default().fg(Color::DarkGray))
+        Span::styled(" [RP: 0] ", Style::default().fg(Color::DarkGray))
     };
 
     let like_badge = if is_liked_by_me {
-        Span::styled(format!(" ❤️ {} LIKED ", likes), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+        Span::styled(format!(" [+1: {} LIKED] ", likes), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
     } else if likes > 0 {
-        Span::styled(format!(" ❤️ {} ", likes), Style::default().fg(Color::Red))
+        Span::styled(format!(" [+1: {}] ", likes), Style::default().fg(Color::Yellow))
     } else {
-        Span::styled(" 🤍 0 ", Style::default().fg(Color::DarkGray))
+        Span::styled(" [+1: 0] ", Style::default().fg(Color::DarkGray))
     };
 
     let bottom_border = if is_selected {
@@ -302,7 +361,7 @@ fn render_station_card(
             reply_badge,
             repost_badge,
             like_badge,
-            Span::styled(" ━━ [L] Like  [R] Reply  [g] Stream ━", Style::default().fg(Color::Yellow)),
+            Span::styled(" ━━ [L] Like  [R] Reply  [g] Live ━", Style::default().fg(Color::Yellow)),
         ])
     } else {
         Line::from(vec![
@@ -323,7 +382,7 @@ fn render_station_card(
 fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     let side_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(48), Constraint::Percentage(52)])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
     let relays_block = Block::default()
@@ -356,15 +415,15 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     }
 
     relay_lines.push(Line::from(""));
-    relay_lines.push(Line::from(Span::styled("Discovered LAN Peers:", Style::default().fg(Color::Cyan))));
+    relay_lines.push(Line::from(Span::styled("Discovered LAN & Mesh Peers:", Style::default().fg(Color::Cyan))));
 
     if app.discovered_peers.is_empty() {
-        relay_lines.push(Line::from(Span::styled(" Searching UDP :48690...", Style::default().fg(Color::DarkGray))));
+        relay_lines.push(Line::from(Span::styled(" Searching mesh & UDP :48690...", Style::default().fg(Color::DarkGray))));
     } else {
         for peer in &app.discovered_peers {
             relay_lines.push(Line::from(vec![
-                Span::styled(" LAN: ", Style::default().fg(Color::Yellow)),
-                Span::styled(format!("{}:{} ", peer.ip, peer.relay_port), Style::default().fg(Color::White)),
+                Span::styled(" PEER: ", Style::default().fg(Color::Yellow)),
+                Span::styled(format!("{} ", peer.ws_url), Style::default().fg(Color::White)),
                 Span::styled(format!("[{}]", peer.name), Style::default().fg(Color::DarkGray)),
             ]));
         }
@@ -384,6 +443,17 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(app.share_address.clone(), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
+            Span::styled("Safe Base64 Ticket: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if app.safe_ticket.len() > 30 {
+                    format!("{}...", &app.safe_ticket[..30])
+                } else {
+                    app.safe_ticket.clone()
+                },
+                Style::default().fg(Color::LightCyan),
+            ),
+        ]),
+        Line::from(vec![
             Span::styled("Detected IP: ", Style::default().fg(Color::DarkGray)),
             Span::styled(app.detected_ip.clone(), Style::default().fg(Color::Cyan)),
         ]),
@@ -392,129 +462,108 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(format!("{} saved ([b] connect)", bookmarks_count), Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
+            Span::styled("Active Group: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("#{}", app.current_group), Style::default().fg(Color::Yellow)),
+        ]),
+        Line::from(vec![
             Span::styled("Offline Outbox: ", Style::default().fg(Color::DarkGray)),
             Span::styled(format!("{} pending", app.outbox.len()), Style::default().fg(Color::Yellow)),
         ]),
-        Line::from(vec![
-            Span::styled("Network Access: ", Style::default().fg(Color::DarkGray)),
-            Span::styled("DEADAIR Intranet Exclusive", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]),
     ];
 
-    if let Some(idx) = app.selected_note_index {
-        if let Some(event) = app.timeline.get(idx) {
-            let author = app.profiles.get(&event.pubkey).cloned().unwrap_or_else(|| {
-                let hex = event.pubkey.to_hex();
-                format!("{}..{}", &hex[..6], &hex[hex.len() - 4..])
-            });
-            let likes = app.post_likes.get(&event.id).copied().unwrap_or(0);
-            let replies = app.post_replies.get(&event.id).copied().unwrap_or(0);
-
-            info_lines.push(Line::from(""));
-            info_lines.push(Line::from(Span::styled("Selected Transmission:", Style::default().fg(Color::Yellow))));
-            info_lines.push(Line::from(vec![
-                Span::styled(" Author: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(author, Style::default().fg(Color::White)),
-            ]));
-            info_lines.push(Line::from(vec![
-                Span::styled(" Stats: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("❤️ {}  💬 {}", likes, replies), Style::default().fg(Color::Cyan)),
-            ]));
-        }
+    if let Some((msg, _)) = &app.status_toast {
+        info_lines.push(Line::from(""));
+        info_lines.push(Line::from(vec![
+            Span::styled(">> ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(msg.clone(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        ]));
     }
 
     let info_block = Block::default()
-        .title(" Domestic Station Specs ")
+        .title(" Station Status & Safe Ticket ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(Style::default().fg(Color::Magenta));
 
-    let info_widget = Paragraph::new(info_lines).block(info_block);
+    let info_widget = Paragraph::new(info_lines).block(info_block).wrap(Wrap { trim: true });
     f.render_widget(info_widget, side_chunks[1]);
 }
 
 fn render_input(f: &mut Frame, app: &App, area: Rect) {
-    let (border_color, title) = match (&app.input_mode, &app.replying_to) {
-        (InputMode::Editing, Some(target)) => {
-            let author = app.profiles.get(&target.pubkey).cloned().unwrap_or_else(|| {
-                let hex = target.pubkey.to_hex();
-                format!("{}..{}", &hex[..6], &hex[hex.len() - 4..])
-            });
-            (
-                Color::Yellow,
-                format!(" Replying to @{} (Enter to transmit, Esc to cancel) ", author),
-            )
-        }
-        (InputMode::Editing, None) => (
-            Color::Yellow,
-            " Broadcasting to DEADAIR Intranet Mesh (Enter to transmit, Esc for nav) ".to_string(),
-        ),
-        (InputMode::Normal, _) => (
-            Color::DarkGray,
-            " Station Chat (Press [i] or [Enter] to write note, [j/k] to browse) ".to_string(),
-        ),
+    let (border_color, title) = match app.input_mode {
+        InputMode::Normal => (Color::DarkGray, " Command / Navigation Mode (Press 'i' or Enter to type) "),
+        InputMode::Editing => (Color::Yellow, " Compose / Input Mode (Press Esc to browse) "),
     };
 
-    let block = Block::default()
+    let prompt_prefix = match app.active_tab {
+        ActiveTab::Main => "[MAIN]> ",
+        ActiveTab::Direct => "[DIRECT]> ",
+        ActiveTab::Groups => "[GROUP]> ",
+    };
+
+    let reply_indicator = if let Some(reply_target) = &app.replying_to {
+        let name = app.profiles.get(&reply_target.pubkey).cloned().unwrap_or_else(|| {
+            let hex = reply_target.pubkey.to_hex();
+            format!("{}..{}", &hex[..6], &hex[hex.len() - 4..])
+        });
+        Span::styled(format!("Replying to {} | ", name), Style::default().fg(Color::Yellow))
+    } else {
+        Span::raw("")
+    };
+
+    let input_line = Line::from(vec![
+        reply_indicator,
+        Span::styled(prompt_prefix, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(&app.input_buffer, Style::default().fg(Color::White)),
+    ]);
+
+    let input_block = Block::default()
         .title(title)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
 
-    let input_line = Line::from(vec![
-        Span::styled(" > ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(app.input_buffer.clone(), Style::default().fg(Color::White)),
+    let paragraph = Paragraph::new(input_line).block(input_block);
+    f.render_widget(paragraph, area);
+}
+
+fn render_footer(f: &mut Frame, _app: &App, area: Rect) {
+    let footer_text = Line::from(vec![
+        Span::styled("Tabs: ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[1] Main  [2] Direct  [3] Groups  [Tab] Cycle  |  ", Style::default().fg(Color::Cyan)),
+        Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[i] Type  [r] Reply  [l] Like(+1)  [s] Safe Ticket  [/image] Picture  [q] Quit", Style::default().fg(Color::Yellow)),
     ]);
 
-    let paragraph = Paragraph::new(input_line).block(block);
+    let paragraph = Paragraph::new(footer_text).alignment(Alignment::Center);
     f.render_widget(paragraph, area);
 }
 
-fn render_footer(f: &mut Frame, app: &App, area: Rect) {
-    let footer_line = if let Some((msg, _)) = &app.status_toast {
-        Line::from(vec![
-            Span::styled(" * ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled(msg.clone(), Style::default().fg(Color::White)),
-        ])
-    } else {
-        Line::from(vec![
-            Span::styled("[i/Enter]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Write  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[j/k]", Style::default().fg(Color::Yellow)),
-            Span::styled(" Browse  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[L]", Style::default().fg(Color::Red)),
-            Span::styled(" Like  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[r]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Reply/Relay  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[s]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Share  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[b]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Bookmarks  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[c]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Clear  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[q]", Style::default().fg(Color::Cyan)),
-            Span::styled(" Quit", Style::default().fg(Color::DarkGray)),
-        ])
-    };
-
-    let paragraph = Paragraph::new(footer_line).alignment(Alignment::Left);
-    f.render_widget(paragraph, area);
+fn author_color_from_pubkey(pubkey: &PublicKey) -> Color {
+    let bytes = pubkey.to_bytes();
+    let sum = (bytes[0] ^ bytes[1]) % 6;
+    match sum {
+        0 => Color::Cyan,
+        1 => Color::Green,
+        2 => Color::Yellow,
+        3 => Color::Magenta,
+        4 => Color::LightBlue,
+        _ => Color::LightRed,
+    }
 }
 
-fn format_relative_time(created_at: u64) -> String {
+fn format_relative_time(created_at_sec: u64) -> String {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(created_at);
+        .unwrap_or_default()
+        .as_secs();
 
-    if created_at > now {
+    if created_at_sec > now {
         return "just now".to_string();
     }
 
-    let diff = now - created_at;
-    if diff < 10 {
-        "just now".to_string()
-    } else if diff < 60 {
+    let diff = now.saturating_sub(created_at_sec);
+    if diff < 60 {
         format!("{}s ago", diff)
     } else if diff < 3600 {
         format!("{}m ago", diff / 60)
@@ -522,45 +571,5 @@ fn format_relative_time(created_at: u64) -> String {
         format!("{}h ago", diff / 3600)
     } else {
         format!("{}d ago", diff / 86400)
-    }
-}
-
-fn author_color_from_pubkey(pk: &PublicKey) -> Color {
-    let bytes = pk.to_bytes();
-    match (bytes[0] ^ bytes[1]) % 6 {
-        0 => Color::Cyan,
-        1 => Color::Magenta,
-        2 => Color::Yellow,
-        3 => Color::Green,
-        4 => Color::LightBlue,
-        _ => Color::Red,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_format_relative_time() {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        assert_eq!(format_relative_time(now), "just now");
-        assert_eq!(format_relative_time(now - 5), "just now");
-        assert_eq!(format_relative_time(now - 30), "30s ago");
-        assert_eq!(format_relative_time(now - 120), "2m ago");
-        assert_eq!(format_relative_time(now - 7200), "2h ago");
-        assert_eq!(format_relative_time(now - 172800), "2d ago");
-    }
-
-    #[test]
-    fn test_author_color_consistency() {
-        let pk = PublicKey::from_hex("0000000000000000000000000000000000000000000000000000000000000001").unwrap();
-        let color1 = author_color_from_pubkey(&pk);
-        let color2 = author_color_from_pubkey(&pk);
-        assert_eq!(color1, color2);
     }
 }

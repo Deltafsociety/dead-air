@@ -8,6 +8,7 @@ use deadair::identity::Identity;
 use deadair::net_info;
 use deadair::outbox::Outbox;
 use deadair::relay::{EmbeddedRelay, RelayStore};
+use deadair::ticket::StationTicket;
 use nostr::event::{Event, EventBuilder, EventId, FinalizeEvent, Kind, Tag};
 use nostr::key::PublicKey;
 use nostr::nips::nip01::Metadata;
@@ -33,6 +34,11 @@ pub struct NoteDto {
     pub is_liked_by_me: bool,
     pub reply_to_id: Option<String>,
     pub reply_to_pubkey: Option<String>,
+    pub is_image: bool,
+    pub image_data: Option<String>,
+    pub tab: String,
+    pub group_name: Option<String>,
+    pub recipient_pubkey: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -62,9 +68,12 @@ pub struct StateDto {
     pub relay_active: bool,
     pub relay_port: u16,
     pub share_address: String,
+    pub safe_ticket: String,
     pub detected_ip: String,
     pub outbox_count: usize,
     pub station_notes: Vec<NoteDto>,
+    pub direct_notes: Vec<NoteDto>,
+    pub group_notes: Vec<NoteDto>,
     pub bookmarks: Vec<BookmarkDto>,
     pub relays: Vec<RelayStatusDto>,
     pub peers: Vec<PeerDto>,
@@ -80,6 +89,8 @@ pub struct GuiBackend {
     pub outbox: Outbox,
     pub bookmarks: BookmarkManager,
     pub station_notes: Vec<Event>,
+    pub direct_notes: Vec<Event>,
+    pub group_notes: Vec<Event>,
     pub profiles: HashMap<PublicKey, String>,
     pub profile_details: HashMap<PublicKey, ProfileInfo>,
     pub post_likes: HashMap<EventId, usize>,
@@ -87,6 +98,7 @@ pub struct GuiBackend {
     pub post_reposts: HashMap<EventId, usize>,
     pub my_likes: HashSet<EventId>,
     pub share_address: String,
+    pub safe_ticket: String,
     pub detected_ip: String,
     pub discovered_peers: Vec<PeerNode>,
     pub inbound_event_tx: mpsc::UnboundedSender<(Event, String)>,
@@ -129,6 +141,34 @@ impl GuiBackend {
         let reply_to_id = ev.tags.event_ids().next().map(|id| id.to_hex());
         let reply_to_pubkey = ev.tags.public_keys().next().map(|pk| pk.to_hex());
 
+        let is_direct = ev.tags.iter().any(|t| {
+            let s = t.as_slice();
+            s.len() >= 2 && s[0] == "type" && s[1] == "direct"
+        });
+
+        let group_name = ev.tags.iter().find_map(|t| {
+            let s = t.as_slice();
+            if s.len() >= 2 && (s[0] == "g" || s[0] == "group") {
+                Some(s[1].to_string())
+            } else {
+                None
+            }
+        });
+
+        let tab = if is_direct {
+            "direct".to_string()
+        } else if group_name.is_some() {
+            "group".to_string()
+        } else {
+            "main".to_string()
+        };
+
+        let (is_image, image_data) = if ev.content.contains("data:image/") || ev.content.starts_with("![") {
+            (true, Some(ev.content.clone()))
+        } else {
+            (false, None)
+        };
+
         NoteDto {
             id: ev.id.to_hex(),
             pubkey: ev.pubkey.to_hex(),
@@ -145,17 +185,19 @@ impl GuiBackend {
             is_liked_by_me,
             reply_to_id,
             reply_to_pubkey,
+            is_image,
+            image_data,
+            tab,
+            group_name,
+            recipient_pubkey: None,
         }
     }
 
-    /// Exclusively accept events that originate from DEADAIR stations/users
     pub fn is_deadair_event(&self, event: &Event) -> bool {
-        // 1. Authored by the local user
         if event.pubkey == self.identity.keys.public_key() {
             return true;
         }
 
-        // 2. Contains standard DEADAIR client tag
         let has_deadair_tag = event.tags.iter().any(|t| {
             let slice = t.as_slice();
             slice.len() >= 2 && slice[0].eq_ignore_ascii_case("client") && slice[1].eq_ignore_ascii_case("deadair")
@@ -164,7 +206,6 @@ impl GuiBackend {
             return true;
         }
 
-        // 3. Authored by a known LAN peer discovered via UDP beacon
         if self.discovered_peers.iter().any(|p| {
             p.name == event.pubkey.to_hex()
                 || self.profiles.get(&event.pubkey).map_or(false, |name| name == &p.name)
@@ -176,30 +217,6 @@ impl GuiBackend {
     }
 }
 
-fn format_relative_time(created_at: u64) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(created_at);
-
-    if created_at > now {
-        return "just now".to_string();
-    }
-
-    let diff = now - created_at;
-    if diff < 10 {
-        "just now".to_string()
-    } else if diff < 60 {
-        format!("{}s ago", diff)
-    } else if diff < 3600 {
-        format!("{}m ago", diff / 60)
-    } else if diff < 86400 {
-        format!("{}h ago", diff / 3600)
-    } else {
-        format!("{}d ago", diff / 86400)
-    }
-}
-
 // ----------------- Tauri Commands -----------------
 
 #[tauri::command]
@@ -208,6 +225,24 @@ async fn get_state(state: tauri::State<'_, Arc<Mutex<GuiBackend>>>) -> Result<St
 
     let station_notes: Vec<NoteDto> = backend
         .station_notes
+        .iter()
+        .rev()
+        .take(150)
+        .rev()
+        .map(|e| backend.event_to_dto(e))
+        .collect();
+
+    let direct_notes: Vec<NoteDto> = backend
+        .direct_notes
+        .iter()
+        .rev()
+        .take(150)
+        .rev()
+        .map(|e| backend.event_to_dto(e))
+        .collect();
+
+    let group_notes: Vec<NoteDto> = backend
+        .group_notes
         .iter()
         .rev()
         .take(150)
@@ -260,9 +295,12 @@ async fn get_state(state: tauri::State<'_, Arc<Mutex<GuiBackend>>>) -> Result<St
         relay_active: backend.embedded_relay.is_some(),
         relay_port: backend.relay_port,
         share_address: backend.share_address.clone(),
+        safe_ticket: backend.safe_ticket.clone(),
         detected_ip: backend.detected_ip.clone(),
         outbox_count: backend.outbox.len(),
         station_notes,
+        direct_notes,
+        group_notes,
         bookmarks,
         relays,
         peers,
@@ -274,6 +312,9 @@ async fn send_note(
     text: String,
     reply_to_id: Option<String>,
     reply_to_pubkey: Option<String>,
+    tab: Option<String>,
+    group: Option<String>,
+    recipient: Option<String>,
     state: tauri::State<'_, Arc<Mutex<GuiBackend>>>,
 ) -> Result<NoteDto, String> {
     let mut backend = state.lock().await;
@@ -284,6 +325,21 @@ async fn send_note(
 
     let deadair_tag = Tag::parse(["client", "deadair"]).unwrap_or_else(|_| Tag::hashtag("deadair"));
     let mut builder = EventBuilder::new(Kind::TextNote, clean_text).tag(deadair_tag);
+
+    let target_tab = tab.unwrap_or_else(|| "main".to_string());
+    if target_tab == "direct" {
+        builder = builder.tag(Tag::parse(["type", "direct"]).unwrap());
+        if let Some(target_pk_hex) = recipient {
+            if let Ok(pk) = PublicKey::from_hex(&target_pk_hex) {
+                builder = builder.tag(Tag::public_key(pk));
+            }
+        }
+    } else if target_tab == "group" {
+        let grp = group.unwrap_or_else(|| "general".to_string());
+        builder = builder
+            .tag(Tag::parse(["type", "group"]).unwrap())
+            .tag(Tag::parse(["g", &grp]).unwrap());
+    }
 
     if let Some(target_hex) = reply_to_id {
         if let Ok(event_id) = EventId::from_hex(&target_hex) {
@@ -309,9 +365,52 @@ async fn send_note(
     backend.client_pool.publish(event.clone());
 
     let dto = backend.event_to_dto(&event);
-    backend.station_notes.push(event);
+    if target_tab == "direct" {
+        backend.direct_notes.push(event);
+    } else if target_tab == "group" {
+        backend.group_notes.push(event);
+    } else {
+        backend.station_notes.push(event);
+    }
 
     Ok(dto)
+}
+
+#[tauri::command]
+async fn send_image(
+    data_uri: String,
+    caption: Option<String>,
+    tab: Option<String>,
+    group: Option<String>,
+    recipient: Option<String>,
+    state: tauri::State<'_, Arc<Mutex<GuiBackend>>>,
+) -> Result<NoteDto, String> {
+    let cap = caption.unwrap_or_else(|| "picture".to_string());
+    let content = format!("![{}]({})", cap, data_uri);
+    send_note(content, None, None, tab, group, recipient, state).await
+}
+
+#[tauri::command]
+async fn get_safe_ticket(state: tauri::State<'_, Arc<Mutex<GuiBackend>>>) -> Result<String, String> {
+    let backend = state.lock().await;
+    Ok(backend.safe_ticket.clone())
+}
+
+#[tauri::command]
+async fn decode_safe_ticket(code: String) -> Result<StationTicket, String> {
+    StationTicket::decode(&code).ok_or_else(|| "Failed to decode ticket".to_string())
+}
+
+#[tauri::command]
+async fn connect_safe_ticket(
+    code: String,
+    state: tauri::State<'_, Arc<Mutex<GuiBackend>>>,
+) -> Result<StationTicket, String> {
+    let ticket = StationTicket::decode(&code).ok_or_else(|| "Invalid ticket or address".to_string())?;
+    let mut backend = state.lock().await;
+    backend.bookmarks.add(ticket.ws.clone(), ticket.name.clone());
+    backend.client_pool.add_relay(ticket.ws.clone());
+    Ok(ticket)
 }
 
 #[tauri::command]
@@ -363,6 +462,11 @@ async fn set_station_name(
         .map_err(|e| e.to_string())?;
     let my_pk = backend.identity.keys.public_key();
     backend.profiles.insert(my_pk, name.clone());
+    backend.safe_ticket = StationTicket::new(
+        &backend.share_address,
+        &name,
+        Some(backend.identity.short_npub.clone()),
+    ).encode();
 
     let meta = Metadata::new().name(&name).display_name(&name);
     if let Ok(event) = meta.finalize(&backend.identity.keys) {
@@ -400,12 +504,20 @@ async fn toggle_embedded_relay(
 
 #[tauri::command]
 async fn add_bookmark(
-    url: String,
-    name: String,
+    target: String,
+    name: Option<String>,
     state: tauri::State<'_, Arc<Mutex<GuiBackend>>>,
 ) -> Result<Vec<BookmarkDto>, String> {
     let mut backend = state.lock().await;
-    backend.bookmarks.add(url.clone(), name);
+
+    let (url, bookmark_name) = if let Some(ticket) = StationTicket::decode(&target) {
+        (ticket.ws, name.unwrap_or(ticket.name))
+    } else {
+        let bname = name.unwrap_or_else(|| format!("node-{}", &target[target.len().saturating_sub(6)..]));
+        (target, bname)
+    };
+
+    backend.bookmarks.add(url.clone(), bookmark_name);
     backend.client_pool.add_relay(url);
 
     let list = backend
@@ -448,7 +560,31 @@ async fn clear_timeline(
 ) -> Result<(), String> {
     let mut backend = state.lock().await;
     backend.station_notes.clear();
+    backend.direct_notes.clear();
+    backend.group_notes.clear();
     Ok(())
+}
+
+fn format_relative_time(created_at_sec: u64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    if created_at_sec > now {
+        return "just now".to_string();
+    }
+
+    let diff = now.saturating_sub(created_at_sec);
+    if diff < 60 {
+        format!("{}s ago", diff)
+    } else if diff < 3600 {
+        format!("{}m ago", diff / 60)
+    } else if diff < 86400 {
+        format!("{}h ago", diff / 3600)
+    } else {
+        format!("{}d ago", diff / 86400)
+    }
 }
 
 // ----------------- Tauri App Setup -----------------
@@ -493,6 +629,13 @@ pub fn run() {
                 let mut profiles = HashMap::new();
                 profiles.insert(identity.keys.public_key(), identity.name.clone());
 
+                let share_address = format!("ws://127.0.0.1:{}", relay_port);
+                let safe_ticket = StationTicket::new(
+                    &share_address,
+                    &identity.name,
+                    Some(identity.short_npub.clone()),
+                ).encode();
+
                 let backend = Arc::new(Mutex::new(GuiBackend {
                     identity,
                     relay_port,
@@ -503,13 +646,16 @@ pub fn run() {
                     outbox,
                     bookmarks,
                     station_notes: Vec::new(),
+                    direct_notes: Vec::new(),
+                    group_notes: Vec::new(),
                     profiles,
                     profile_details: HashMap::new(),
                     post_likes: HashMap::new(),
                     post_replies: HashMap::new(),
                     post_reposts: HashMap::new(),
                     my_likes: HashSet::new(),
-                    share_address: format!("ws://127.0.0.1:{}", relay_port),
+                    share_address,
+                    safe_ticket,
                     detected_ip: "127.0.0.1".to_string(),
                     discovered_peers: Vec::new(),
                     inbound_event_tx,
@@ -553,22 +699,91 @@ pub fn run() {
                                 *b.post_replies.entry(target_id).or_insert(0) += 1;
                             }
 
+                            // Mesh presence detection
+                            let is_presence = event.tags.iter().any(|t| {
+                                let s = t.as_slice();
+                                s.len() >= 2 && s[0] == "type" && s[1] == "presence"
+                            });
+
+                            if is_presence {
+                                let mut ws_addr = None;
+                                let mut peer_name = None;
+                                for t in event.tags.iter() {
+                                    let s = t.as_slice();
+                                    if s.len() >= 2 {
+                                        if s[0] == "address" { ws_addr = Some(s[1].to_string()); }
+                                        if s[0] == "name" { peer_name = Some(s[1].to_string()); }
+                                        if s[0] == "ticket" {
+                                            if let Some(decoded) = StationTicket::decode(&s[1]) {
+                                                ws_addr = Some(decoded.ws);
+                                                peer_name = Some(decoded.name);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if let Some(addr) = ws_addr {
+                                    if event.pubkey != b.identity.keys.public_key()
+                                        && !addr.contains("127.0.0.1")
+                                        && !b.discovered_peers.iter().any(|p| p.ws_url == addr)
+                                    {
+                                        let pname = peer_name.unwrap_or_else(|| "mesh-peer".to_string());
+                                        let ip = addr.replace("ws://", "").split(':').next().unwrap_or("0.0.0.0").to_string();
+                                        b.client_pool.add_relay(addr.clone());
+                                        b.discovered_peers.push(PeerNode {
+                                            ip,
+                                            relay_port: 4869,
+                                            ws_url: addr.clone(),
+                                            name: pname.clone(),
+                                            last_seen: std::time::Instant::now(),
+                                        });
+                                        let _ = handle_inbound.emit("peer_discovered", PeerDto {
+                                            ws_url: addr,
+                                            name: pname,
+                                        });
+                                    }
+                                }
+                            }
+
                             // Strict filter: Accept only notes from DEADAIR stations
                             if b.is_deadair_event(&event) {
-                                if !b.station_notes.iter().any(|e| e.id == event.id) {
-                                    let note_dto = b.event_to_dto(&event);
-                                    b.station_notes.push(event);
-                                    if b.station_notes.len() > 1000 {
-                                        b.station_notes.remove(0);
+                                let is_direct = event.tags.iter().any(|t| {
+                                    let s = t.as_slice();
+                                    s.len() >= 2 && s[0] == "type" && s[1] == "direct"
+                                });
+
+                                let is_group = event.tags.iter().any(|t| {
+                                    let s = t.as_slice();
+                                    s.len() >= 2 && (s[0] == "g" || s[0] == "group")
+                                });
+
+                                let note_dto = b.event_to_dto(&event);
+
+                                if is_direct {
+                                    if !b.direct_notes.iter().any(|e| e.id == event.id) {
+                                        b.direct_notes.push(event);
+                                        let _ = handle_inbound.emit("direct_note", note_dto);
                                     }
-                                    let _ = handle_inbound.emit("station_note", note_dto);
+                                } else if is_group {
+                                    if !b.group_notes.iter().any(|e| e.id == event.id) {
+                                        b.group_notes.push(event);
+                                        let _ = handle_inbound.emit("group_note", note_dto);
+                                    }
+                                } else {
+                                    if !b.station_notes.iter().any(|e| e.id == event.id) {
+                                        b.station_notes.push(event);
+                                        if b.station_notes.len() > 1000 {
+                                            b.station_notes.remove(0);
+                                        }
+                                        let _ = handle_inbound.emit("station_note", note_dto);
+                                    }
                                 }
                             }
                         }
                     }
                 });
 
-                // Background task 2: Peer discovery listener
+                // Background task 2: LAN Peer discovery listener
                 let backend_peers = backend.clone();
                 let handle_peers = app_handle.clone();
                 tokio::spawn(async move {
@@ -594,6 +809,11 @@ pub fn run() {
                     let mut b = backend_ip.lock().await;
                     b.detected_ip = ip.clone();
                     b.share_address = share_url.clone();
+                    b.safe_ticket = StationTicket::new(
+                        &share_url,
+                        &b.identity.name,
+                        Some(b.identity.short_npub.clone()),
+                    ).encode();
                     let _ = handle_ip.emit("ip_updated", (ip, share_url));
                 });
             });
@@ -603,6 +823,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_state,
             send_note,
+            send_image,
+            get_safe_ticket,
+            decode_safe_ticket,
+            connect_safe_ticket,
             like_note,
             set_station_name,
             toggle_embedded_relay,

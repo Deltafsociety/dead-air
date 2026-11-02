@@ -21,6 +21,7 @@ name = "deadair"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
 crossterm = "0.29.0"
 dirs = "7.0.0"
 futures-util = "0.3.34"

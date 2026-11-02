@@ -30,21 +30,57 @@ echo -e "${GREEN}${BOLD}>> DEADAIR Native Source Installer${NC}"
 echo -e "   Target: Building native binary from source with custom embedded icon"
 echo ""
 
+# Check for uninstall command-line flag
+if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ] || [ "${DEADAIR_TARGET:-}" = "uninstall" ] || [ "${DEADAIR_TARGET:-}" = "4" ]; then
+  uninstall_deadair() {
+    echo -e "${YELLOW}${BOLD}[!] Starting DEADAIR uninstallation...${NC}"
+    local BINS=("/usr/local/bin/deadair" "/usr/local/bin/deadair-gui" "${HOME}/.cargo/bin/deadair" "${HOME}/.cargo/bin/deadair-gui" "${HOME}/.local/bin/deadair" "${HOME}/.local/bin/deadair-gui")
+    for b in "${BINS[@]}"; do
+      if [ -f "$b" ]; then
+        if [ -w "$(dirname "$b")" ]; then rm -f "$b"; else run_elevated rm -f "$b" || true; fi
+        echo -e "[+] Removed binary: $b"
+      fi
+    done
+    local DESKTOP_FILES=("${HOME}/.local/share/applications/deadair.desktop" "/usr/local/share/applications/deadair.desktop" "/usr/share/applications/deadair.desktop")
+    for d in "${DESKTOP_FILES[@]}"; do
+      if [ -f "$d" ]; then
+        rm -f "$d" 2>/dev/null || run_elevated rm -f "$d" || true
+        echo -e "[+] Removed desktop entry: $d"
+      fi
+    done
+    local ICONS=("${HOME}/.local/share/icons/hicolor/512x512/apps/deadair.png" "/usr/share/icons/hicolor/512x512/apps/deadair.png")
+    for ic in "${ICONS[@]}"; do
+      if [ -f "$ic" ]; then
+        rm -f "$ic" 2>/dev/null || run_elevated rm -f "$ic" || true
+        echo -e "[+] Removed icon: $ic"
+      fi
+    done
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+    fi
+    echo ""
+    echo -e "${GREEN}${BOLD}DEADAIR has been successfully uninstalled from your system.${NC}"
+    exit 0
+  }
+  uninstall_deadair
+fi
+
 # ------------------------------------------------------------------------------
 # 1. Edition Selection (Interactive or via $DEADAIR_TARGET)
 # ------------------------------------------------------------------------------
-echo -e "${CYAN}Please select the DEADAIR edition you want to install:${NC}"
+echo -e "${CYAN}Please select the DEADAIR action you want to perform:${NC}"
 echo -e "  ${BOLD}[1]${NC} Terminal TUI Station (command: ${CYAN}deadair${NC}) ${GREEN}[DEFAULT]${NC}"
 echo -e "  ${BOLD}[2]${NC} Desktop GUI Station (adds to your Application Menu with custom icon)"
 echo -e "  ${BOLD}[3]${NC} Both (Terminal TUI + Desktop GUI)"
+echo -e "  ${BOLD}[4]${NC} Uninstall DEADAIR from system"
 echo ""
 
 TARGET_CHOICE="${DEADAIR_TARGET:-}"
 if [ -z "$TARGET_CHOICE" ]; then
   if [ -t 0 ]; then
-    read -r -p "Enter choice [1/2/3] (default: 1): " TARGET_CHOICE || true
+    read -r -p "Enter choice [1/2/3/4] (default: 1): " TARGET_CHOICE || true
   elif [ -e /dev/tty ]; then
-    read -r -p "Enter choice [1/2/3] (default: 1): " TARGET_CHOICE </dev/tty || true
+    read -r -p "Enter choice [1/2/3/4] (default: 1): " TARGET_CHOICE </dev/tty || true
   fi
 fi
 
@@ -53,6 +89,39 @@ BUILD_TUI=0
 BUILD_GUI=0
 
 case "$TARGET_CHOICE" in
+  4|uninstall|UNINSTALL)
+    uninstall_deadair() {
+      echo -e "${YELLOW}${BOLD}[!] Starting DEADAIR uninstallation...${NC}"
+      local BINS=("/usr/local/bin/deadair" "/usr/local/bin/deadair-gui" "${HOME}/.cargo/bin/deadair" "${HOME}/.cargo/bin/deadair-gui" "${HOME}/.local/bin/deadair" "${HOME}/.local/bin/deadair-gui")
+      for b in "${BINS[@]}"; do
+        if [ -f "$b" ]; then
+          if [ -w "$(dirname "$b")" ]; then rm -f "$b"; else run_elevated rm -f "$b" || true; fi
+          echo -e "[+] Removed binary: $b"
+        fi
+      done
+      local DESKTOP_FILES=("${HOME}/.local/share/applications/deadair.desktop" "/usr/local/share/applications/deadair.desktop" "/usr/share/applications/deadair.desktop")
+      for d in "${DESKTOP_FILES[@]}"; do
+        if [ -f "$d" ]; then
+          rm -f "$d" 2>/dev/null || run_elevated rm -f "$d" || true
+          echo -e "[+] Removed desktop entry: $d"
+        fi
+      done
+      local ICONS=("${HOME}/.local/share/icons/hicolor/512x512/apps/deadair.png" "/usr/share/icons/hicolor/512x512/apps/deadair.png")
+      for ic in "${ICONS[@]}"; do
+        if [ -f "$ic" ]; then
+          rm -f "$ic" 2>/dev/null || run_elevated rm -f "$ic" || true
+          echo -e "[+] Removed icon: $ic"
+        fi
+      done
+      if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+      fi
+      echo ""
+      echo -e "${GREEN}${BOLD}DEADAIR has been successfully uninstalled from your system.${NC}"
+      exit 0
+    }
+    uninstall_deadair
+    ;;
   2|gui|GUI)
     BUILD_GUI=1
     echo -e "[+] Selected: ${BOLD}Desktop GUI Station${NC}"

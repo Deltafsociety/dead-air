@@ -23,21 +23,60 @@ Write-Host "   Target: Building native Windows binary from source with embedded 
 Write-Host ""
 
 # ------------------------------------------------------------------------------
-# 1. Edition Selection (Interactive or via $env:DEADAIR_TARGET)
+# 1. Action / Edition Selection (Interactive or via $env:DEADAIR_TARGET)
 # ------------------------------------------------------------------------------
+function Uninstall-Deadair {
+    Write-Host "[!] Uninstalling DEADAIR from system..." -ForegroundColor Yellow
+
+    $ProgramsDir = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
+    $DesktopDir = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
+    $StartShortcut = "$ProgramsDir\DEADAIR.lnk"
+    $DeskShortcut = "$DesktopDir\DEADAIR.lnk"
+
+    if (Test-Path $StartShortcut) { Remove-Item $StartShortcut -Force; Write-Host "[+] Removed Start Menu shortcut" -ForegroundColor Green }
+    if (Test-Path $DeskShortcut) { Remove-Item $DeskShortcut -Force; Write-Host "[+] Removed Desktop shortcut" -ForegroundColor Green }
+
+    $InstallDir = "$env:LOCALAPPDATA\deadair"
+    if (Test-Path $InstallDir) {
+        Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "[+] Removed installation directory: $InstallDir" -ForegroundColor Green
+    }
+
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    if ($UserPath) {
+        $BinDir = "$InstallDir\bin"
+        $NewPaths = ($UserPath -split ';' | Where-Object { $_ -ne "" -and $_ -ne $BinDir }) -join ';'
+        [Environment]::SetEnvironmentVariable("Path", $NewPaths, [EnvironmentVariableTarget]::User)
+        Write-Host "[+] Cleaned User PATH" -ForegroundColor Green
+    }
+
+    Write-Host ""
+    Write-Host "DEADAIR has been successfully uninstalled from your Windows system." -ForegroundColor Green
+    exit 0
+}
+
 $TargetChoice = $env:DEADAIR_TARGET
+if ($TargetChoice -eq "4" -or $TargetChoice -eq "uninstall" -or $args -contains "-Uninstall") {
+    Uninstall-Deadair
+}
+
 if (-not $TargetChoice) {
     if ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
-        Write-Host "Please select the DEADAIR edition you want to install:" -ForegroundColor Cyan
+        Write-Host "Please select the DEADAIR action you want to perform:" -ForegroundColor Cyan
         Write-Host "  [1] Terminal TUI Station (command: deadair) [DEFAULT]"
         Write-Host "  [2] Desktop GUI Station (adds to Start Menu & Desktop with custom icon)"
         Write-Host "  [3] Both (Terminal TUI + Desktop GUI)"
+        Write-Host "  [4] Uninstall DEADAIR from system"
         Write-Host ""
-        $ChoiceInput = Read-Host "Enter choice [1/2/3] (default: 1)"
+        $ChoiceInput = Read-Host "Enter choice [1/2/3/4] (default: 1)"
         if ($ChoiceInput) { $TargetChoice = $ChoiceInput.Trim() } else { $TargetChoice = "1" }
     } else {
         $TargetChoice = "1"
     }
+}
+
+if ($TargetChoice -eq "4" -or $TargetChoice -eq "uninstall") {
+    Uninstall-Deadair
 }
 
 $BuildTui = ($TargetChoice -eq "1" -or $TargetChoice -eq "3" -or $TargetChoice -eq "tui" -or $TargetChoice -eq "both" -or $TargetChoice -eq "all")

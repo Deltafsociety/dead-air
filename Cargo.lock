@@ -842,6 +842,7 @@ dependencies = [
 name = "deadair"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "crossterm",
  "dirs",
  "futures-util",
@@ -859,6 +860,7 @@ dependencies = [
 name = "deadair-gui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "deadair",
  "log",
  "nostr",

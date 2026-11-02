@@ -1,4 +1,4 @@
-# How DEADAIR Works // Complete Guide & Architecture
+# How DEADAIR Works // Complete Architecture & User Guide
 
 [English](HOW_IT_WORKS.md) | [فارسی](#راهنمای-فارسی-نحوه-کارکرد-deadair)
 
@@ -18,8 +18,11 @@ DEADAIR turns any ordinary laptop, PC, or home server into a private communicati
 * [Core Concepts in Plain English](#core-concepts-in-plain-english)
 * [Step-by-Step: How It Works](#step-by-step-how-it-works)
 * [Architecture Diagram](#architecture-diagram)
-* [How to Use (Real-World Scenarios)](#how-to-use-real-world-scenarios)
-* [Data & Storage Layout](#data--storage-layout)
+* [Multi-Tab Communication: Main, Direct & Groups](#multi-tab-communication-main-direct--groups)
+* [Picture Transmission](#picture-transmission)
+* [Safe Base64 Connection Tickets](#safe-base64-connection-tickets)
+* [Global & Intranet Peer Discovery](#global--intranet-peer-discovery)
+* [How to Install and Uninstall](#how-to-install-and-uninstall)
 * [Security & Privacy](#security--privacy)
 * [Links & Community](#links--community)
 * [راهنمای فارسی (نحوه کارکرد DEADAIR)](#راهنمای-فارسی-نحوه-کارکرد-deadair)
@@ -34,14 +37,23 @@ DEADAIR turns any ordinary laptop, PC, or home server into a private communicati
 2. **Your Computer IS a Relay:**
    Usually, chat apps require a central company server. In DEADAIR, pressing `[r]` in the app starts an embedded WebSocket relay on your own machine. Your friends can connect directly to your IP.
 
-3. **Automatic Local Wi-Fi Discovery (UDP Beacons):**
-   If you and a friend or family member are on the same Wi-Fi or office network, you don't even need to type an IP address. DEADAIR sends a quiet local broadcast beacon every 10 seconds. Neighbor stations find each other automatically.
+3. **Automatic Local & Mesh Discovery:**
+   - **Local Wi-Fi (UDP Beacon)**: If you and a friend or family member are on the same Wi-Fi or office network, DEADAIR sends quiet local broadcast beacons every 10 seconds. Stations find each other automatically.
+   - **Across Cities (Mesh Presence Gossip)**: When nodes connect to any domestic relay, DEADAIR periodically broadcasts a presence announcement. Connected stations automatically learn about each other and interconnect into an intranet mesh.
 
-4. **Offline Outbox (Store & Forward):**
-   If you type a message while you are walking or completely disconnected, DEADAIR saves it to an encrypted local queue on disk. The moment your station connects to a peer or relay, it sends your queued messages automatically.
+4. **Multi-Tab Communication (Main, Direct & Groups):**
+   - **[1] Main Mesh**: Global public broadcasts seen by everyone in your domestic network.
+   - **[2] Direct Chat**: Private 1-on-1 conversations (`/dm <user> <msg>`).
+   - **[3] Groups**: Topic channels (`/group <name>`) like `#general`, `#alerts`, and `#tech`.
 
-5. **Exclusively for DEADAIR (No Foreign Relays):**
-   Public Nostr relays are flooded with global chatter and spam that require high-speed internet and waste limited local bandwidth. DEADAIR only processes and stores messages meant for DEADAIR stations, keeping your local mesh clean, fast, and private.
+5. **Picture Sharing Support:**
+   Users can attach and send pictures (`/image <path>` in TUI or `[+ PICTURE]` in GUI) with inline data encoding and thumbnail rendering.
+
+6. **Safe Base64 Address Tickets:**
+   Instead of exposing raw IP addresses in plain text, DEADAIR encodes station addresses into safe Base64 tickets (`deadair://...`). Pasting a ticket automatically decrypts and connects immediately.
+
+7. **Offline Outbox (Store & Forward):**
+   If you type a message while disconnected, DEADAIR saves it to an encrypted local queue on disk. The moment your station connects to a peer or relay, it sends your queued messages automatically.
 
 ---
 
@@ -53,15 +65,18 @@ flowchart TD
     Identity["Local Keypair (secp256k1)<br>~/.config/deadair/identity.json"]
     Relay["Embedded Relay (:4869)<br>Starts with [r]"]
     UDP["UDP Discovery (:48690)<br>Auto-finds LAN peers"]
+    Gossip["Mesh Presence Gossip<br>Auto-discovers remote nodes"]
     Outbox["Offline Outbox Queue<br>Auto-broadcasts when connected"]
     
     User --> Identity
     User --> Relay
     User --> UDP
+    User --> Gossip
     User --> Outbox
 
     Relay <-->|"Domestic IP (ws://IP:4869)"| RemoteFriend["Friend across city (Intranet)"]
     UDP <-->|"Local Wi-Fi Subnet"| LANPeer["Peer on same Wi-Fi / Router"]
+    Gossip <-->|"Relay Presence Signal"| MeshNodes["All connected mesh nodes"]
 ```
 
 ### 1. Identity Generation
@@ -72,7 +87,8 @@ When you first start DEADAIR:
 
 ### 2. Network Discovery
 - **Local LAN / Wi-Fi**: DEADAIR listens on UDP port `48690`. When another station appears on your local network, both stations greet each other and sync messages immediately.
-- **Across Cities (Domestic Intranet)**: DEADAIR automatically detects your local or routable domestic IP address. You press `[s]` to copy your share address (e.g. `ws://5.x.x.x:4869 [YourName]`). You send this string to your friends via SMS or phone call. They add it with `/bookmark add ws://5.x.x.x:4869 YourName`.
+- **Across Cities (Domestic Intranet)**: DEADAIR automatically detects your routable domestic IP address. You press `[s]` to copy your share address or Safe Ticket (`deadair://...`). Send this string to your contacts via SMS or call. They add it with `/bookmark add <ticket>`.
+- **Mesh Presence Gossip**: When connected to any domestic relay, stations periodically broadcast their presence signal tagged `["client", "deadair"]`, `["type", "presence"]`. All nodes on that relay automatically discover each other's addresses and peer together.
 
 ### 3. Relay Hosting & Synchronization
 - Any station can be a client, a relay, or both.
@@ -81,54 +97,86 @@ When you first start DEADAIR:
 
 ---
 
-## How to Use (Real-World Scenarios)
+## Multi-Tab Communication: Main, Direct & Groups
 
-### Scenario A: Same Building or Wi-Fi Network
-1. Both people open DEADAIR (`deadair` in terminal, or `deadair-gui` from the application menu).
-2. Set your nicknames: `/name Bob` and `/name Alice`.
-3. That's it! Within seconds, the local UDP beacon will discover both stations and show `[LAN PEER DISCOVERED]`. You can now chat in real-time without internet access.
+DEADAIR features three organized tabs in both the Terminal TUI and Desktop GUI:
 
-### Scenario B: Across Different Cities During an Internet Shutdown
-1. Start DEADAIR on your laptop.
-2. Turn on your relay by pressing `[r]`.
-3. Press `[s]` (or type `/share`) to see your domestic address:
-   ```text
-   Domestic Address: ws://151.x.x.x:4869 [Alice]
-   ```
-4. Send that address to your friend in another city via SMS or phone call.
-5. Your friend runs:
-   ```text
-   /bookmark add ws://151.x.x.x:4869 Alice
-   ```
-6. You are now connected directly through the domestic network!
+1. **Main Mesh Feed (`[1]`)**:
+   Public transmissions distributed to all stations on the mesh. Ideal for broadcasts, sitreps, and general communications.
+2. **Direct Chat (`[2]`)**:
+   Targeted 1-on-1 private messaging. Use `/dm <user> <msg>` or select a peer from the discovered list.
+3. **Topic Groups (`[3]`)**:
+   Channel-scoped conversations tagged with a channel name (e.g., `#alerts`, `#mesh`, `#general`). Switch or join channels with `/group <name>`.
+
+Cycle tabs in the TUI using `Tab` or keys `1`, `2`, `3`.
 
 ---
 
-## Data & Storage Layout
+## Picture Transmission
 
-DEADAIR stores all configuration locally in your user profile:
-- **Linux & macOS**: `~/.config/deadair/`
-- **Windows**: `%LOCALAPPDATA%\deadair\` (or `%USERPROFILE%\.config\deadair\`)
+You can share pictures across the domestic mesh even without internet access:
+- **Terminal TUI**: Run `/image /path/to/picture.png [caption]`. The image is read, converted to a compact base64 data URI, and transmitted. Receivers see a clean card tag `[ATTACHED PICTURE: caption (size)]` without cluttering the screen.
+- **Desktop GUI**: Click `[+ PICTURE]`, select an image from your disk, and transmit. The image renders as an inline thumbnail with click-to-view.
 
-Files:
-- `identity.json`: Your cryptographic private and public key.
-- `domestic_relays.json`: Your saved list of domestic peer stations and bookmarked nodes.
-- `outbox.json`: Messages drafted while offline, waiting for a connection.
+---
+
+## Safe Base64 Connection Tickets
+
+For security and privacy when transmitting addresses over SMS or insecure local chats, DEADAIR supports Base64 ticket encoding:
+- Run `/share` in TUI or click **SAFE TICKET** in GUI.
+- You will receive a code like:
+  ```text
+  deadair://eyJ3cyI6IndzOi8vNS4xLjIuMzo0ODY5IiwibmFtZSI6IkFsaWNlIn0=
+  ```
+- Send this code to a friend.
+- Your friend runs `/bookmark add deadair://...` or pastes it into the GUI connect box.
+- DEADAIR decodes the ticket on the fly, validates the address, adds the bookmark, and connects immediately.
+
+---
+
+## How to Install and Uninstall
+
+### Install One-Liners (Interactive Menu):
+Select `[1]` for Terminal TUI, `[2]` for Desktop GUI, `[3]` for Both, or `[4]` to Uninstall.
+
+**Linux & macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.ps1 | iex
+```
+
+### Complete Uninstallation:
+To remove DEADAIR binaries, desktop entries, shortcuts, and application icons from your system:
+
+**Linux & macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash -s -- --uninstall
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:DEADAIR_TARGET="uninstall"; irm https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.ps1 | iex
+```
 
 ---
 
 ## Security & Privacy
 
-- **End-to-End Cryptography**: All transmissions are signed with your private key. Nobody can edit or tamper with your messages.
-- **No Telemetry**: DEADAIR never phones home, uses no tracking analytics, and makes zero connections to third-party services.
-- **Sovereign**: The code is 100% open source under the MIT license and builds from source on your own machine.
+- **End-to-End Signatures**: Every note, reaction, and presence announcement is signed with your private key.
+- **No Foreign Relays / Spam Filtering**: Public internet relays and foreign spam are strictly rejected. Only authentic DEADAIR traffic travels through the mesh.
+- **No Telemetry**: DEADAIR makes zero analytics calls, collects no telemetry, and connects only to relays you or your local mesh peers configure.
+- **Open Source**: Licensed under the MIT License.
 
 ---
 
 ## Links & Community
 
-* **Source Code & GitHub**: [https://github.com/deltafsociety/dead-air](https://github.com/deltafsociety/dead-air)
-* **Donate & Support**: [https://coindrop.to/delta](https://coindrop.to/delta)
+* **GitHub Repository**: [https://github.com/deltafsociety/dead-air](https://github.com/deltafsociety/dead-air)
+* **Donate**: [https://coindrop.to/delta](https://coindrop.to/delta)
 * **Telegram Channel**: [https://t.me/LOW_SIGNAL73](https://t.me/LOW_SIGNAL73)
 
 ---
@@ -147,49 +195,51 @@ Files:
 
 ---
 
-## ویژگی‌های اصلی به زبان ساده
+## قابلیت‌های کلیدی جدید به زبان ساده
 
-۱. **بدون نیاز به ثبت نام و شماره تلفن**:
-   در اولین اجرا، یک جفت کلید امنیتی رمزنگاری به صورت کاملاً آفلاین روی دستگاه شما تولید می‌شود. هویت شما فقط متعلق به خود شماست.
+۱. **کشف خودکار همتایان در سطح اینترانت**:
+   علاوه بر وای‌فای محلی، ایستگاه‌ها با انتشار سیگنال حضور روی رله‌های داخلی به صورت خودکار یکدیگر را پیدا کرده و متصل می‌شوند.
 
-۲. **رایانه شما خودش یک سرور است**:
-   با فشردن کلید `[r]`، یک سرور رله وب‌سوکت روی سیستم شما فعال می‌شود. دیگران می‌توانند مستقیماً به آدرس IP شما متصل شوند.
+۲. **تفکیک گفتگوها در ۳ تب مجزا**:
+   - **فید عمومی (Main Mesh)**: مخابره عمومی پیام‌ها به تمام اعضای شبکه.
+   - **پیام‌های مستقیم (Direct Chat)**: گفتگوی خصوصی دونفره با دستور `/dm`.
+   - **کانال‌های گروهی (Groups)**: چت در کانال‌های موضوعی با دستور `/group`.
 
-۳. **پیدا کردن خودکار افراد در یک وای‌فای (UDP Beacon)**:
-   اگر با همکاران، خانواده یا همسایه‌ها به یک مودم وای‌فای مشترک وصل هستید، نیازی به وارد کردن هیچ آدرسی ندارید. دستگاه‌ها هر چند ثانیه سیگنال محلی ارسال کرده و یکدیگر را خودکار پیدا می‌کنند.
+۳. **امکان ارسال تصاویر**:
+   ارسال عکس از طریق دستور `/image` در نسخه ترمینال یا کلید `[+ PICTURE]` در نسخه گرافیکی دسکتاپ.
 
-۴. **صندوق ارسال آفلاین (Outbox)**:
-   اگر هنگام راه رفتن یا قطعی موقت شبکه پیامی بنویسید، پیام در صف ذخیره می‌شود و به محض برقراری اتصال با اولین دوست یا ایستگاه، خودکار ارسال خواهد شد.
+۴. **بلیط امن کدگذاری‌شده با Base64**:
+   آدرس ایستگاه شما به صورت یک بلیط امن (مانند `deadair://...`) کدگذاری می‌شود تا در پیامک یا چت‌های محلی بدون افشای مستقیم IP به راحتی منتقل شده و توسط برنامه مقابل خودکار رمزگشایی و متصل شود.
 
-۵. **محیط امن و اختصاصی DEADAIR**:
-   ترافیک اسپم و رله‌های عمومی اینترنت که باعث مصرف ترافیک و کندی می‌شوند مسدود شده‌اند؛ برنامه فقط پیام‌های معتبر شبکه DEADAIR را مبادله می‌کند.
+۵. **قابلیت حذف کامل (Uninstall)**:
+   اسکریپت نصب امکان حذف تمام فایل‌های اجرایی، آیکون‌ها و میانبرها را به طور کامل فراهم می‌کند.
 
 ---
 
 ## سناریوهای استفاده در زندگی واقعی
 
-### سناریوی ۱: اعضای یک خانه یا ساختمان متصل به یک مودم
+### سناریوی ۱: اعضای یک ساختمان متصل به یک مودم
 ۱. هر دو نفر برنامه را اجرا می‌کنند (`deadair` در خط فرمان یا `deadair-gui` از منوی برنامه‌ها).
-۲. نام خود را تنظیم می‌کنند: `name Ali/` و `name Sara/`.
+۲. نام خود را تنظیم می‌کنند: `/name Ali` و `/name Sara`.
 ۳. برنامه به طور خودکار از طریق وای‌فای ارتباط را برقرار کرده و پیام‌ها فوراً منتقل می‌شوند.
 
 ### سناریوی ۲: ارتباط بین دو شهر هنگام قطعی اینترنت
 ۱. شما برنامه را باز کرده و با زدن کلید `[r]` رله را روشن می‌کنید.
-۲. با زدن کلید `[s]` آدرس خود را مشاهده و یادداشت می‌کنید:
+۲. با زدن کلید `[s]` بلیط امن Base64 خود را مشاهده و یادداشت می‌کنید:
    ```text
-   ws://5.x.x.x:4869 [Ali]
+   deadair://eyJ3cyI6IndzOi8vNS4xLjIuMzo0ODY5IiwibmFtZSI6IkFsaWNlIn0=
    ```
-۳. این آدرس را با پیامک برای دوست خود در شهر دیگر ارسال می‌کنید.
+۳. این کد را با پیامک برای دوست خود در شهر دیگر ارسال می‌کنید.
 ۴. دوست شما در برنامه خود دستور زیر را وارد می‌کند:
    ```text
-   /bookmark add ws://5.x.x.x:4869 Ali
+   /bookmark add deadair://...
    ```
-۵. ارتباط مستقیم اینترانت برقرار است و می‌توانید بدون اینترنت جهانی چت کنید!
+۵. ارتباط مستقیم برقرار است و می‌توانید بدون اینترنت جهانی چت کنید!
 
 ---
 
-## حمایت و راه‌های ارتباطی
+## راه‌های ارتباطی و حمایت مالی
 
-* **گیت‌هاب پروژه**: [https://github.com/deltafsociety/dead-air](https://github.com/deltafsociety/dead-air)
+* **گیت‌هاب**: [https://github.com/deltafsociety/dead-air](https://github.com/deltafsociety/dead-air)
 * **حمایت مالی (Donate)**: [https://coindrop.to/delta](https://coindrop.to/delta)
 * **کانال تلگرام**: [https://t.me/LOW_SIGNAL73](https://t.me/LOW_SIGNAL73)

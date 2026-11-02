@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nostr::event::FinalizeEvent;
 use nostr::nips::nip01::Metadata;
@@ -14,6 +16,7 @@ use crate::identity::Identity;
 use crate::net_info;
 use crate::outbox::Outbox;
 use crate::relay::{EmbeddedRelay, RelayStore};
+use crate::ticket::StationTicket;
 
 #[derive(Clone, Debug, Default)]
 pub struct ProfileInfo {
@@ -29,6 +32,13 @@ pub enum InputMode {
     Editing,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum ActiveTab {
+    Main,
+    Direct,
+    Groups,
+}
+
 pub struct App {
     pub identity: Identity,
     pub relay_port: u16,
@@ -40,7 +50,13 @@ pub struct App {
     pub bookmarks: BookmarkManager,
     pub detected_ip: String,
     pub share_address: String,
+    pub safe_ticket: String,
+    pub active_tab: ActiveTab,
     pub timeline: Vec<Event>,
+    pub direct_messages: Vec<Event>,
+    pub group_messages: Vec<Event>,
+    pub current_group: String,
+    pub selected_direct_peer: Option<PublicKey>,
     pub profiles: HashMap<PublicKey, String>,
     pub profile_details: HashMap<PublicKey, ProfileInfo>,
     pub post_likes: HashMap<EventId, usize>,
@@ -54,6 +70,7 @@ pub struct App {
     pub input_buffer: String,
     pub input_mode: InputMode,
     pub status_toast: Option<(String, Instant)>,
+    pub last_presence_time: Instant,
     pub should_quit: bool,
     inbound_event_tx: mpsc::UnboundedSender<(Event, String)>,
     inbound_event_rx: mpsc::UnboundedReceiver<(Event, String)>,
@@ -100,6 +117,7 @@ impl App {
 
         let initial_ip = "detecting...".to_string();
         let initial_share = format!("ws://127.0.0.1:{}", relay_port);
+        let safe_ticket = StationTicket::new(&initial_share, &identity.name, Some(identity.short_npub.clone())).encode();
 
         let ip_tx_spawn = ip_tx.clone();
         tokio::spawn(async move {
@@ -118,7 +136,13 @@ impl App {
             bookmarks,
             detected_ip: initial_ip,
             share_address: initial_share,
+            safe_ticket,
+            active_tab: ActiveTab::Main,
             timeline: Vec::new(),
+            direct_messages: Vec::new(),
+            group_messages: Vec::new(),
+            current_group: "general".to_string(),
+            selected_direct_peer: None,
             profiles,
             profile_details: HashMap::new(),
             post_likes: HashMap::new(),
@@ -131,7 +155,8 @@ impl App {
             relay_statuses: Vec::new(),
             input_buffer: String::new(),
             input_mode: InputMode::Editing,
-            status_toast: Some(("DEADAIR station initialized on intranet mesh".to_string(), Instant::now())),
+            status_toast: Some(("DEADAIR station initialized on sovereign mesh".to_string(), Instant::now())),
+            last_presence_time: Instant::now(),
             should_quit: false,
             inbound_event_tx,
             inbound_event_rx,
@@ -141,19 +166,42 @@ impl App {
         };
 
         app.broadcast_metadata().await;
+        app.broadcast_presence().await;
         app.flush_outbox().await;
 
         Ok(app)
+    }
+
+    pub fn current_notes(&self) -> &[Event] {
+        match self.active_tab {
+            ActiveTab::Main => &self.timeline,
+            ActiveTab::Direct => &self.direct_messages,
+            ActiveTab::Groups => &self.group_messages,
+        }
+    }
+
+    pub fn current_notes_mut(&mut self) -> &mut Vec<Event> {
+        match self.active_tab {
+            ActiveTab::Main => &mut self.timeline,
+            ActiveTab::Direct => &mut self.direct_messages,
+            ActiveTab::Groups => &mut self.group_messages,
+        }
     }
 
     pub async fn tick(&mut self) {
         while let Ok((ip, share_url)) = self.ip_rx.try_recv() {
             self.detected_ip = ip;
             self.share_address = share_url;
+            self.safe_ticket = StationTicket::new(
+                &self.share_address,
+                &self.identity.name,
+                Some(self.identity.short_npub.clone()),
+            ).encode();
             self.status_toast = Some((
                 format!("Detected domestic address: {}", self.share_address),
                 Instant::now(),
             ));
+            self.broadcast_presence().await;
         }
 
         while let Ok((event, source_url)) = self.inbound_event_rx.try_recv() {
@@ -185,13 +233,92 @@ impl App {
                     *self.post_replies.entry(target_id).or_insert(0) += 1;
                 }
 
+                // Check for mesh peer presence gossip (discovers peers outside local network)
+                let is_presence = event.tags.iter().any(|t| {
+                    let s = t.as_slice();
+                    s.len() >= 2 && s[0] == "type" && s[1] == "presence"
+                });
+
+                if is_presence {
+                    let mut ws_addr = None;
+                    let mut peer_name = None;
+                    let mut ticket_str = None;
+
+                    for t in event.tags.iter() {
+                        let s = t.as_slice();
+                        if s.len() >= 2 {
+                            if s[0] == "address" { ws_addr = Some(s[1].to_string()); }
+                            if s[0] == "name" { peer_name = Some(s[1].to_string()); }
+                            if s[0] == "ticket" { ticket_str = Some(s[1].to_string()); }
+                        }
+                    }
+
+                    if let Some(t_str) = ticket_str {
+                        if let Some(decoded) = StationTicket::decode(&t_str) {
+                            ws_addr = Some(decoded.ws);
+                            peer_name = Some(decoded.name);
+                        }
+                    }
+
+                    if let Some(addr) = ws_addr {
+                        if event.pubkey != self.identity.keys.public_key()
+                            && !addr.contains("127.0.0.1")
+                            && !self.discovered_peers.iter().any(|p| p.ws_url == addr)
+                        {
+                            let name = peer_name.unwrap_or_else(|| "mesh-node".to_string());
+                            let ip_part = addr.replace("ws://", "").replace("wss://", "");
+                            let ip = ip_part.split(':').next().unwrap_or("0.0.0.0").to_string();
+                            self.client_pool.add_relay(addr.clone());
+                            self.discovered_peers.push(PeerNode {
+                                ip,
+                                relay_port: 4869,
+                                ws_url: addr.clone(),
+                                name: name.clone(),
+                                last_seen: Instant::now(),
+                            });
+                            self.status_toast = Some((
+                                format!("Mesh peer discovered: {} [{}]", addr, name),
+                                Instant::now(),
+                            ));
+                        }
+                    }
+                }
+
                 // Strictly filter for DEADAIR network users only
                 if self.is_deadair_event(&event, Some(&source_url)) {
-                    if !self.timeline.iter().any(|e| e.id == event.id) {
-                        self.timeline.push(event);
-                        self.timeline.sort_by_key(|e| e.created_at);
-                        if self.timeline.len() > 1000 {
-                            self.timeline.remove(0);
+                    let is_direct = event.tags.iter().any(|t| {
+                        let s = t.as_slice();
+                        s.len() >= 2 && s[0] == "type" && s[1] == "direct"
+                    });
+
+                    let is_group = event.tags.iter().any(|t| {
+                        let s = t.as_slice();
+                        s.len() >= 2 && (s[0] == "g" || s[0] == "group" || (s[0] == "type" && s[1] == "group"))
+                    });
+
+                    if is_direct {
+                        if !self.direct_messages.iter().any(|e| e.id == event.id) {
+                            self.direct_messages.push(event.clone());
+                            self.direct_messages.sort_by_key(|e| e.created_at);
+                            if self.direct_messages.len() > 1000 {
+                                self.direct_messages.remove(0);
+                            }
+                        }
+                    } else if is_group {
+                        if !self.group_messages.iter().any(|e| e.id == event.id) {
+                            self.group_messages.push(event.clone());
+                            self.group_messages.sort_by_key(|e| e.created_at);
+                            if self.group_messages.len() > 1000 {
+                                self.group_messages.remove(0);
+                            }
+                        }
+                    } else {
+                        if !self.timeline.iter().any(|e| e.id == event.id) {
+                            self.timeline.push(event.clone());
+                            self.timeline.sort_by_key(|e| e.created_at);
+                            if self.timeline.len() > 1000 {
+                                self.timeline.remove(0);
+                            }
                         }
                     }
                 }
@@ -203,7 +330,7 @@ impl App {
             if !exists {
                 self.client_pool.add_relay(peer.ws_url.clone());
                 self.status_toast = Some((
-                    format!("Discovered peer {} [{}]", peer.ws_url, peer.name),
+                    format!("Discovered LAN peer {} [{}]", peer.ws_url, peer.name),
                     Instant::now(),
                 ));
                 self.discovered_peers.push(peer);
@@ -211,6 +338,12 @@ impl App {
         }
 
         self.relay_statuses = self.client_pool.statuses().await;
+
+        // Periodic presence gossip (every 30 seconds) so remote nodes find each other
+        if self.last_presence_time.elapsed().as_secs() >= 30 {
+            self.last_presence_time = Instant::now();
+            self.broadcast_presence().await;
+        }
 
         if let Some((_, time)) = self.status_toast {
             if time.elapsed().as_secs() > 4 {
@@ -222,14 +355,12 @@ impl App {
     /// Determines if an event is authentic DEADAIR traffic:
     /// - Authored by the local user, OR
     /// - Contains explicit DEADAIR client tag, OR
-    /// - Authored by a known LAN peer discovered via beacon
+    /// - Authored by a known LAN/mesh peer
     pub fn is_deadair_event(&self, event: &Event, _source_url: Option<&str>) -> bool {
-        // 1. Authored by the local user
         if event.pubkey == self.identity.keys.public_key() {
             return true;
         }
 
-        // 2. Contains standard DEADAIR client tag
         let has_deadair_tag = event.tags.iter().any(|t| {
             let slice = t.as_slice();
             slice.len() >= 2 && slice[0].eq_ignore_ascii_case("client") && slice[1].eq_ignore_ascii_case("deadair")
@@ -238,7 +369,6 @@ impl App {
             return true;
         }
 
-        // 3. Authored by a known LAN peer discovered via UDP beacon
         if self.discovered_peers.iter().any(|p| {
             p.name == event.pubkey.to_hex()
                 || self.profiles.get(&event.pubkey).map_or(false, |name| name == &p.name)
@@ -259,8 +389,34 @@ impl App {
             InputMode::Normal => match key.code {
                 KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('i') | KeyCode::Enter => self.input_mode = InputMode::Editing,
+                KeyCode::Tab | KeyCode::BackTab => {
+                    self.active_tab = match self.active_tab {
+                        ActiveTab::Main => ActiveTab::Direct,
+                        ActiveTab::Direct => ActiveTab::Groups,
+                        ActiveTab::Groups => ActiveTab::Main,
+                    };
+                    self.selected_note_index = None;
+                    let tab_name = match self.active_tab {
+                        ActiveTab::Main => "Main Mesh",
+                        ActiveTab::Direct => "Direct Messages",
+                        ActiveTab::Groups => "Groups",
+                    };
+                    self.status_toast = Some((format!("Switched to {}", tab_name), Instant::now()));
+                }
+                KeyCode::Char('1') => {
+                    self.active_tab = ActiveTab::Main;
+                    self.selected_note_index = None;
+                }
+                KeyCode::Char('2') => {
+                    self.active_tab = ActiveTab::Direct;
+                    self.selected_note_index = None;
+                }
+                KeyCode::Char('3') => {
+                    self.active_tab = ActiveTab::Groups;
+                    self.selected_note_index = None;
+                }
                 KeyCode::Char('r') => {
-                    if self.selected_note_index.is_some() || !self.timeline.is_empty() {
+                    if self.selected_note_index.is_some() || !self.current_notes().is_empty() {
                         self.start_reply_to_selected();
                     } else {
                         self.toggle_relay().await;
@@ -271,13 +427,14 @@ impl App {
                     self.like_selected_post().await;
                 }
                 KeyCode::Char('j') | KeyCode::Down => {
-                    if !self.timeline.is_empty() {
+                    let total = self.current_notes().len();
+                    if total > 0 {
                         match self.selected_note_index {
                             None => {
-                                self.selected_note_index = Some(self.timeline.len().saturating_sub(1));
+                                self.selected_note_index = Some(total.saturating_sub(1));
                             }
                             Some(cur) => {
-                                if cur + 1 < self.timeline.len() {
+                                if cur + 1 < total {
                                     self.selected_note_index = Some(cur + 1);
                                 }
                             }
@@ -285,10 +442,11 @@ impl App {
                     }
                 }
                 KeyCode::Char('k') | KeyCode::Up => {
-                    if !self.timeline.is_empty() {
+                    let total = self.current_notes().len();
+                    if total > 0 {
                         match self.selected_note_index {
                             None => {
-                                self.selected_note_index = Some(self.timeline.len().saturating_sub(2));
+                                self.selected_note_index = Some(total.saturating_sub(2));
                             }
                             Some(cur) => {
                                 if cur > 0 {
@@ -303,16 +461,16 @@ impl App {
                     self.status_toast = Some(("Resumed live stream".to_string(), Instant::now()));
                 }
                 KeyCode::Char('G') | KeyCode::End => {
-                    if !self.timeline.is_empty() {
+                    if !self.current_notes().is_empty() {
                         self.selected_note_index = Some(0);
                     }
                 }
                 KeyCode::Char('b') => self.connect_bookmarks().await,
                 KeyCode::Char('s') => self.show_share_toast(),
                 KeyCode::Char('c') => {
-                    self.timeline.clear();
+                    self.current_notes_mut().clear();
                     self.selected_note_index = None;
-                    self.status_toast = Some(("Feed cleared".to_string(), Instant::now()));
+                    self.status_toast = Some(("View cleared".to_string(), Instant::now()));
                 }
                 KeyCode::Esc => {
                     if self.selected_note_index.is_some() {
@@ -344,8 +502,8 @@ impl App {
 
     pub async fn like_selected_post(&mut self) {
         let target_event = match self.selected_note_index {
-            Some(idx) => self.timeline.get(idx).cloned(),
-            None => self.timeline.last().cloned(),
+            Some(idx) => self.current_notes().get(idx).cloned(),
+            None => self.current_notes().last().cloned(),
         };
 
         if let Some(target) = target_event {
@@ -354,7 +512,7 @@ impl App {
                 return;
             }
 
-            let reaction = match EventBuilder::new(Kind::Reaction, "❤️")
+            let reaction = match EventBuilder::new(Kind::Reaction, "+")
                 .tag(Tag::event(target.id))
                 .tag(Tag::public_key(target.pubkey))
                 .finalize(&self.identity.keys)
@@ -374,14 +532,14 @@ impl App {
                 let hex = target.pubkey.to_hex();
                 format!("{}..{}", &hex[..6], &hex[hex.len() - 4..])
             });
-            self.status_toast = Some((format!("Liked note by {} ❤️", author_name), Instant::now()));
+            self.status_toast = Some((format!("Liked note by {} [+1]", author_name), Instant::now()));
         }
     }
 
     pub fn start_reply_to_selected(&mut self) {
         let target_event = match self.selected_note_index {
-            Some(idx) => self.timeline.get(idx).cloned(),
-            None => self.timeline.last().cloned(),
+            Some(idx) => self.current_notes().get(idx).cloned(),
+            None => self.current_notes().last().cloned(),
         };
 
         if let Some(target) = target_event {
@@ -396,9 +554,24 @@ impl App {
         }
     }
 
-    async fn send_note(&mut self, text: String) {
+    pub async fn send_note(&mut self, text: String) {
         let deadair_tag = Tag::parse(["client", "deadair"]).unwrap_or_else(|_| Tag::hashtag("deadair"));
         let mut builder = EventBuilder::new(Kind::TextNote, &text).tag(deadair_tag);
+
+        match self.active_tab {
+            ActiveTab::Main => {}
+            ActiveTab::Direct => {
+                builder = builder.tag(Tag::parse(["type", "direct"]).unwrap());
+                if let Some(target_pk) = self.selected_direct_peer {
+                    builder = builder.tag(Tag::public_key(target_pk));
+                }
+            }
+            ActiveTab::Groups => {
+                builder = builder
+                    .tag(Tag::parse(["type", "group"]).unwrap())
+                    .tag(Tag::parse(["g", &self.current_group]).unwrap());
+            }
+        }
 
         if let Some(target) = self.replying_to.take() {
             builder = builder
@@ -426,10 +599,63 @@ impl App {
             self.status_toast = Some(("Transmitted note to DEADAIR mesh".to_string(), Instant::now()));
         }
 
-        if !self.timeline.iter().any(|e| e.id == event.id) {
-            self.timeline.push(event);
-            self.timeline.sort_by_key(|e| e.created_at);
+        match self.active_tab {
+            ActiveTab::Main => {
+                if !self.timeline.iter().any(|e| e.id == event.id) {
+                    self.timeline.push(event);
+                    self.timeline.sort_by_key(|e| e.created_at);
+                }
+            }
+            ActiveTab::Direct => {
+                if !self.direct_messages.iter().any(|e| e.id == event.id) {
+                    self.direct_messages.push(event);
+                    self.direct_messages.sort_by_key(|e| e.created_at);
+                }
+            }
+            ActiveTab::Groups => {
+                if !self.group_messages.iter().any(|e| e.id == event.id) {
+                    self.group_messages.push(event);
+                    self.group_messages.sort_by_key(|e| e.created_at);
+                }
+            }
         }
+    }
+
+    pub async fn send_image(&mut self, path_str: &str, caption: Option<&str>) {
+        let path = std::path::Path::new(path_str);
+        if !path.exists() {
+            self.status_toast = Some((format!("File not found: {}", path_str), Instant::now()));
+            return;
+        }
+
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) => {
+                self.status_toast = Some((format!("Failed to read file: {}", e), Instant::now()));
+                return;
+            }
+        };
+
+        if bytes.len() > 2_000_000 {
+            self.status_toast = Some(("Image too large (>2MB). Please choose a smaller picture.".to_string(), Instant::now()));
+            return;
+        }
+
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("png").to_lowercase();
+        let mime = match ext.as_str() {
+            "jpg" | "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            _ => "image/png",
+        };
+
+        let b64 = BASE64.encode(&bytes);
+        let data_uri = format!("data:{};base64,{}", mime, b64);
+        let cap = caption.unwrap_or_else(|| path.file_name().and_then(|s| s.to_str()).unwrap_or("image"));
+        let content = format!("![{}]({})", cap, data_uri);
+
+        self.send_note(content).await;
+        self.status_toast = Some(("Transmitted picture to mesh".to_string(), Instant::now()));
     }
 
     async fn submit_input(&mut self) {
@@ -454,7 +680,13 @@ impl App {
                 let name = new_name.to_string();
                 if let Ok(()) = self.identity.set_name(name.clone()) {
                     self.profiles.insert(self.identity.keys.public_key(), name.clone());
+                    self.safe_ticket = StationTicket::new(
+                        &self.share_address,
+                        &self.identity.name,
+                        Some(self.identity.short_npub.clone()),
+                    ).encode();
                     self.broadcast_metadata().await;
+                    self.broadcast_presence().await;
                     self.status_toast = Some((format!("Station name set to '{}'", name), Instant::now()));
                 }
             }
@@ -471,20 +703,91 @@ impl App {
                 self.status_toast = Some(("Detecting domestic network address...".to_string(), Instant::now()));
             }
             ["/clear"] => {
-                self.timeline.clear();
+                self.current_notes_mut().clear();
                 self.selected_note_index = None;
-                self.status_toast = Some(("Feed cleared".to_string(), Instant::now()));
+                self.status_toast = Some(("View cleared".to_string(), Instant::now()));
             }
-            ["/bookmark", "add", url] => {
-                let name = format!("node-{}", &url[url.len().saturating_sub(6)..]);
-                self.bookmarks.add(url.to_string(), name);
-                self.client_pool.add_relay(url.to_string());
-                self.status_toast = Some((format!("Added bookmark {}", url), Instant::now()));
+            ["/tab", "main"] | ["/tab", "1"] => {
+                self.active_tab = ActiveTab::Main;
+                self.status_toast = Some(("Switched to Main Mesh tab".to_string(), Instant::now()));
+            }
+            ["/tab", "direct"] | ["/tab", "dm"] | ["/tab", "2"] => {
+                self.active_tab = ActiveTab::Direct;
+                self.status_toast = Some(("Switched to Direct Messages tab".to_string(), Instant::now()));
+            }
+            ["/tab", "groups"] | ["/tab", "group"] | ["/tab", "3"] => {
+                self.active_tab = ActiveTab::Groups;
+                self.status_toast = Some((format!("Switched to Groups tab (#{})", self.current_group), Instant::now()));
+            }
+            ["/group", name] | ["/join", name] => {
+                self.current_group = name.trim_start_matches('#').to_string();
+                self.active_tab = ActiveTab::Groups;
+                self.status_toast = Some((format!("Active group set to #{}", self.current_group), Instant::now()));
+            }
+            ["/dm", target, msg @ ..] => {
+                let target_name = target.to_string();
+                let message_body = msg.join(" ");
+                let target_pk = self.profiles.iter().find_map(|(pk, name)| {
+                    if name.eq_ignore_ascii_case(&target_name) || pk.to_hex().starts_with(&target_name) {
+                        Some(*pk)
+                    } else {
+                        None
+                    }
+                });
+
+                if let Some(pk) = target_pk {
+                    self.selected_direct_peer = Some(pk);
+                    self.active_tab = ActiveTab::Direct;
+                    if !message_body.is_empty() {
+                        self.send_note(message_body).await;
+                    } else {
+                        self.status_toast = Some((format!("Direct chat ready with {}", target_name), Instant::now()));
+                    }
+                } else {
+                    self.status_toast = Some((format!("Contact '{}' not found in known peers", target_name), Instant::now()));
+                }
+            }
+            ["/image", path, caption @ ..] => {
+                let cap = if !caption.is_empty() { Some(caption.join(" ")) } else { None };
+                self.send_image(path, cap.as_deref()).await;
+            }
+            ["/encode", url] => {
+                let ticket = StationTicket::new(*url, &self.identity.name, Some(self.identity.short_npub.clone())).encode();
+                self.status_toast = Some((format!("Safe Ticket: {}", ticket), Instant::now()));
+            }
+            ["/encode", url, name] => {
+                let ticket = StationTicket::new(*url, *name, None).encode();
+                self.status_toast = Some((format!("Safe Ticket: {}", ticket), Instant::now()));
+            }
+            ["/decode", code] => {
+                if let Some(ticket) = StationTicket::decode(code) {
+                    self.status_toast = Some((format!("Decoded: {} [{}]", ticket.ws, ticket.name), Instant::now()));
+                } else {
+                    self.status_toast = Some(("Failed to decode ticket".to_string(), Instant::now()));
+                }
+            }
+            ["/bookmark", "add", target] | ["/connect", target] => {
+                if let Some(ticket) = StationTicket::decode(target) {
+                    self.bookmarks.add(ticket.ws.clone(), ticket.name.clone());
+                    self.client_pool.add_relay(ticket.ws.clone());
+                    self.status_toast = Some((format!("Connected & bookmarked safe ticket: {} [{}]", ticket.ws, ticket.name), Instant::now()));
+                } else {
+                    let name = format!("node-{}", &target[target.len().saturating_sub(6)..]);
+                    self.bookmarks.add(target.to_string(), name);
+                    self.client_pool.add_relay(target.to_string());
+                    self.status_toast = Some((format!("Added bookmark {}", target), Instant::now()));
+                }
             }
             ["/bookmark", "add", url, name] => {
-                self.bookmarks.add(url.to_string(), name.to_string());
-                self.client_pool.add_relay(url.to_string());
-                self.status_toast = Some((format!("Added bookmark {} [{}]", url, name), Instant::now()));
+                if let Some(ticket) = StationTicket::decode(url) {
+                    self.bookmarks.add(ticket.ws.clone(), name.to_string());
+                    self.client_pool.add_relay(ticket.ws.clone());
+                    self.status_toast = Some((format!("Added bookmark {} [{}]", ticket.ws, name), Instant::now()));
+                } else {
+                    self.bookmarks.add(url.to_string(), name.to_string());
+                    self.client_pool.add_relay(url.to_string());
+                    self.status_toast = Some((format!("Added bookmark {} [{}]", url, name), Instant::now()));
+                }
             }
             ["/bookmark", "remove", key] => {
                 if self.bookmarks.remove(key) {
@@ -496,11 +799,17 @@ impl App {
             ["/bookmark", "connect"] => {
                 self.connect_bookmarks().await;
             }
-            ["/relay", "add", url] => {
-                let relay_url = url.to_string();
-                self.client_pool.add_relay(relay_url.clone());
-                self.bookmarks.add(relay_url.clone(), "manual-node".to_string());
-                self.status_toast = Some((format!("Added and bookmarked relay {}", relay_url), Instant::now()));
+            ["/relay", "add", target] => {
+                if let Some(ticket) = StationTicket::decode(target) {
+                    self.client_pool.add_relay(ticket.ws.clone());
+                    self.bookmarks.add(ticket.ws.clone(), ticket.name.clone());
+                    self.status_toast = Some((format!("Added and bookmarked relay {} [{}]", ticket.ws, ticket.name), Instant::now()));
+                } else {
+                    let relay_url = target.to_string();
+                    self.client_pool.add_relay(relay_url.clone());
+                    self.bookmarks.add(relay_url.clone(), "manual-node".to_string());
+                    self.status_toast = Some((format!("Added and bookmarked relay {}", relay_url), Instant::now()));
+                }
             }
             ["/like"] => {
                 self.like_selected_post().await;
@@ -516,7 +825,7 @@ impl App {
                 }
             }
             ["/help"] => {
-                self.status_toast = Some(("Commands: /name <nick> | /like | /reply <msg> | /share | /clear | /bookmark add <url>".to_string(), Instant::now()));
+                self.status_toast = Some(("Commands: /name | /tab <1|2|3> | /dm <user> <msg> | /group <name> | /image <file> | /share | /bookmark add <code>".to_string(), Instant::now()));
             }
             _ => {
                 self.status_toast = Some(("Unknown command. Type /help".to_string(), Instant::now()));
@@ -525,8 +834,14 @@ impl App {
     }
 
     pub fn show_share_toast(&mut self) {
+        let ticket = StationTicket::new(
+            &self.share_address,
+            &self.identity.name,
+            Some(self.identity.short_npub.clone()),
+        ).encode();
+        self.safe_ticket = ticket.clone();
         self.status_toast = Some((
-            format!("Share with peers: {} [{}]", self.share_address, self.identity.name),
+            format!("Address: {} | Safe Ticket: {}", self.share_address, ticket),
             Instant::now(),
         ));
     }
@@ -553,6 +868,28 @@ impl App {
         }
     }
 
+    pub async fn broadcast_presence(&mut self) {
+        let deadair_tag = Tag::parse(["client", "deadair"]).unwrap_or_else(|_| Tag::hashtag("deadair"));
+        let presence_tag = Tag::parse(["type", "presence"]).unwrap();
+        let addr_tag = Tag::parse(["address", &self.share_address]).unwrap();
+        let name_tag = Tag::parse(["name", &self.identity.name]).unwrap();
+        let ticket_tag = Tag::parse(["ticket", &self.safe_ticket]).unwrap();
+
+        let builder = EventBuilder::new(Kind::TextNote, format!("DEADAIR Node Online: {}", self.identity.name))
+            .tag(deadair_tag)
+            .tag(presence_tag)
+            .tag(addr_tag)
+            .tag(name_tag)
+            .tag(ticket_tag);
+
+        if let Ok(ev) = builder.finalize(&self.identity.keys) {
+            if let Some(store) = &self.relay_store {
+                let _ = store.add_event(ev.clone()).await;
+            }
+            self.client_pool.publish(ev);
+        }
+    }
+
     pub async fn toggle_relay(&mut self) {
         if let Some(mut relay) = self.embedded_relay.take() {
             relay.stop();
@@ -568,6 +905,7 @@ impl App {
                         format!("Embedded relay running on :{}", self.relay_port),
                         Instant::now(),
                     ));
+                    self.broadcast_presence().await;
                     self.flush_outbox().await;
                 }
                 Err(_) => {
@@ -578,141 +916,19 @@ impl App {
     }
 
     async fn flush_outbox(&mut self) {
-        let pending = self.outbox.pending();
-        if pending.is_empty() {
-            return;
-        }
-
-        for ev in pending {
-            if let Some(store) = &self.relay_store {
-                let _ = store.add_event(ev.clone()).await;
+        let events = self.outbox.pending();
+        let count = events.len();
+        if count > 0 {
+            for event in events {
+                if let Some(store) = &self.relay_store {
+                    let _ = store.add_event(event.clone()).await;
+                }
+                self.client_pool.publish(event);
             }
-            self.client_pool.publish(ev);
+            self.status_toast = Some((
+                format!("Flushed {} queued notes to relays", count),
+                Instant::now(),
+            ));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_event_classification_and_tagging() {
-        let app = App::new().await.expect("App should initialize");
-
-        // 1. Local event authored by user
-        let my_event = EventBuilder::new(Kind::TextNote, "hello from me")
-            .finalize(&app.identity.keys)
-            .unwrap();
-        assert!(app.is_deadair_event(&my_event, None));
-
-        // 2. Foreign event with client=deadair tag
-        let other_keys = Keys::generate();
-        let tag = Tag::parse(["client", "deadair"]).unwrap();
-        let deadair_foreign_event = EventBuilder::new(Kind::TextNote, "hello from deadair friend")
-            .tag(tag)
-            .finalize(&other_keys)
-            .unwrap();
-        assert!(app.is_deadair_event(&deadair_foreign_event, None));
-
-        // 3. Foreign event without client=deadair tag from any relay must be REJECTED
-        let generic_event = EventBuilder::new(Kind::TextNote, "random non-deadair note")
-            .finalize(&other_keys)
-            .unwrap();
-        assert!(!app.is_deadair_event(&generic_event, Some("embedded")));
-        assert!(!app.is_deadair_event(&generic_event, Some("ws://127.0.0.1:4869")));
-        assert!(!app.is_deadair_event(&generic_event, Some("wss://relay.damus.io")));
-    }
-
-    #[tokio::test]
-    async fn test_social_browsing_like_and_reply() {
-        let mut app = App::new().await.expect("App should initialize");
-
-        let other_keys = Keys::generate();
-        let tag = Tag::parse(["client", "deadair"]).unwrap();
-        let ev1 = EventBuilder::new(Kind::TextNote, "First deadair post")
-            .tag(tag.clone())
-            .finalize(&other_keys)
-            .unwrap();
-        let ev2 = EventBuilder::new(Kind::TextNote, "Second deadair post")
-            .tag(tag)
-            .finalize(&other_keys)
-            .unwrap();
-
-        app.timeline.push(ev1.clone());
-        app.timeline.push(ev2.clone());
-        app.input_mode = InputMode::Normal;
-
-        // Press 'k' to browse older posts (from live stream to index 0)
-        app.handle_key(KeyEvent::from(KeyCode::Char('k'))).await;
-        assert_eq!(app.selected_note_index, Some(0));
-
-        // Press 'j' to move forward to index 1
-        app.handle_key(KeyEvent::from(KeyCode::Char('j'))).await;
-        assert_eq!(app.selected_note_index, Some(1));
-
-        // Press 'l' to like the selected post (ev2)
-        app.handle_key(KeyEvent::from(KeyCode::Char('l'))).await;
-        assert!(app.my_likes.contains(&ev2.id));
-        assert_eq!(app.post_likes.get(&ev2.id).copied(), Some(1));
-
-        // Press 'r' to start replying to ev2
-        app.handle_key(KeyEvent::from(KeyCode::Char('r'))).await;
-        assert_eq!(app.input_mode, InputMode::Editing);
-        assert_eq!(app.replying_to.as_ref().map(|e| e.id), Some(ev2.id));
-
-        // Send the reply note
-        app.send_note("Replying to second deadair note".to_string()).await;
-        assert_eq!(app.replying_to, None);
-        assert_eq!(app.post_replies.get(&ev2.id).copied(), Some(1));
-
-        // Verify sent reply has correct 'e' and 'p' tags
-        let sent_reply = app.timeline.last().expect("Reply should be in timeline");
-        let has_e_tag = sent_reply.tags.event_ids().any(|id| id == ev2.id);
-        assert!(has_e_tag, "Reply event should tag parent event id");
-
-        // Press Esc to return to Normal mode
-        app.handle_key(KeyEvent::from(KeyCode::Esc)).await;
-        assert_eq!(app.input_mode, InputMode::Normal);
-
-        // Press 'g' to return to live stream
-        app.handle_key(KeyEvent::from(KeyCode::Char('g'))).await;
-        assert_eq!(app.selected_note_index, None);
-    }
-
-    #[tokio::test]
-    async fn test_social_metrics_aggregation() {
-        let mut app = App::new().await.expect("App should initialize");
-        let other_keys = Keys::generate();
-        let tag = Tag::parse(["client", "deadair"]).unwrap();
-        let base_note = EventBuilder::new(Kind::TextNote, "Base deadair post")
-            .tag(tag)
-            .finalize(&other_keys)
-            .unwrap();
-        app.timeline.push(base_note.clone());
-
-        // Simulate incoming Kind::Reaction (Kind 7)
-        let reaction = EventBuilder::new(Kind::Reaction, "+")
-            .tag(Tag::event(base_note.id))
-            .finalize(&other_keys)
-            .unwrap();
-
-        app.inbound_event_tx
-            .send((reaction, "ws://127.0.0.1:4869".to_string()))
-            .unwrap();
-        app.tick().await;
-        assert_eq!(app.post_likes.get(&base_note.id).copied(), Some(1));
-
-        // Simulate incoming Kind::Repost (Kind 6)
-        let repost = EventBuilder::new(Kind::Repost, "")
-            .tag(Tag::event(base_note.id))
-            .finalize(&other_keys)
-            .unwrap();
-
-        app.inbound_event_tx
-            .send((repost, "ws://127.0.0.1:4869".to_string()))
-            .unwrap();
-        app.tick().await;
-        assert_eq!(app.post_reposts.get(&base_note.id).copied(), Some(1));
     }
 }

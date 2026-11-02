@@ -46,33 +46,47 @@ However, **local connections still work**:
 3. **Turn your computer into a local relay**: Press `[r]`. Your station is now listening on port `4869`.
 4. **Connect with peers**:
    - **On the same Wi-Fi**: DEADAIR finds other devices automatically via local network beacons. No setup needed.
-   - **Across cities**: Press `[s]` to copy your domestic address (e.g., `ws://5.x.x.x:4869 [Alice]`) and share it with friends via SMS or phone. They run `/bookmark add ws://5.x.x.x:4869 Alice` and you're connected.
+   - **Across cities**: Press `[s]` to copy your Safe Base64 Ticket (e.g. `deadair://...`) or domestic IP address and share it with friends via SMS or phone. They run `/bookmark add <ticket>` and you are connected.
 
 ---
 
 ### Key Features
 
 * **No Accounts or Phone Numbers**: Uses standard Nostr cryptographic keys (`secp256k1`) stored locally in `~/.config/deadair/identity.json`.
-* **Automatic Wi-Fi Discovery**: Stations on the same local network find each other automatically over UDP port `48690`.
+* **Automatic Discovery (LAN & Mesh)**: Stations on the same local network find each other automatically over UDP port `48690`. Remote stations across cities discover each other via automatic relay presence gossip.
+* **Multi-Tab Interface**:
+  - `[1] Main Mesh`: Global broadcasts seen by all connected stations.
+  - `[2] Direct Chat`: 1-on-1 private messaging via `/dm <user> <message>`.
+  - `[3] Topic Groups`: Channel-scoped discussions via `/group <name>`.
+* **Picture Sharing**: Attach and transmit images natively across the mesh via `/image <path>` (TUI) or `[+ PICTURE]` (GUI).
+* **Safe Base64 Tickets**: Addresses can be encoded as `deadair://...` tickets for safe transfer over SMS. Receivers decode and connect with a single click or command.
 * **One-Key Local Relay**: Press `[r]` to turn your PC into a relay for friends and family.
 * **Offline Outbox**: Draft messages while offline; DEADAIR sends them automatically the moment a connection is restored.
-* **Clean & Dedicated Mesh**: Only accepts messages from DEADAIR stations. No public internet spam or foreign relay bandwidth waste.
-* **TUI & Desktop GUI**: Run in your favorite terminal or as a native desktop window with a custom cybernetic icon.
+* **Clean & Emoji-Free**: Cybernetic minimalist interface without emoji bloat or clutter.
+* **TUI & Desktop GUI**: Run in your favorite terminal or as a native desktop window with a custom icon.
 
 ---
 
-### Quick Installation (Builds Automatically from Source)
+### Quick Installation & Uninstallation
 
-The installer detects and installs any missing tools (Rust, build tools, Git) and compiles natively for your computer. It gives you the option to install the **Terminal TUI**, the **Desktop GUI**, or **Both**.
+The installer detects and installs any missing tools (Rust, build tools, Git) and compiles natively for your computer. It gives you the option to install the **Terminal TUI**, the **Desktop GUI**, **Both**, or completely **Uninstall**.
 
 #### Linux and macOS
 ```bash
+# Interactive installer (prompts for TUI / GUI / Both / Uninstall):
 curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash
+
+# To uninstall DEADAIR completely:
+curl -fsSL https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.sh | bash -s -- --uninstall
 ```
 
 #### Windows (PowerShell)
 ```powershell
+# Interactive installer:
 irm https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.ps1 | iex
+
+# To uninstall DEADAIR completely:
+$env:DEADAIR_TARGET="uninstall"; irm https://raw.githubusercontent.com/deltafsociety/dead-air/master/install.ps1 | iex
 ```
 
 Once installed:
@@ -104,32 +118,36 @@ cargo build --release -p deadair-gui
 ### Commands & Keyboard Shortcuts
 
 #### Commands
-* `/like`: Like (Nostr Kind 7 reaction) the selected message.
+* `/tab [1|2|3]`: Switch between Main Mesh, Direct Chat, and Groups.
+* `/dm <user> <text>`: Send a direct message in the private chat tab.
+* `/group <name>`: Switch or join a group channel (e.g., `/group alerts`).
+* `/image <file> [caption]`: Transmit a picture attachment across the mesh.
+* `/share`: Show your domestic address and Base64 Safe Ticket.
+* `/bookmark add <ticket|url>`: Connect to and bookmark a station or safe ticket.
+* `/decode <ticket>`: Decode and inspect a Base64 safe connection ticket.
+* `/like`: Like (+1 reaction) the selected message.
 * `/reply <text>`: Reply directly to the selected message in a thread.
 * `/name <nick>`: Set your display nickname.
-* `/share`: Show your domestic address and nickname.
-* `/ip`: Re-detect your local and domestic IP address.
-* `/bookmark add <url> [name]`: Save a domestic station and connect to it.
-* `/bookmark remove <key>`: Remove a station from bookmarks.
-* `/bookmark connect`: Reconnect to all saved stations.
-* `/relay add <url>`: Connect to any WebSocket relay.
-* `/clear`: Clear the timeline screen.
+* `/ip`: Re-detect your domestic IP address.
+* `/clear`: Clear the message view.
 * `/help`: Show command help.
 
 #### Keyboard Shortcuts
 | Key | Action |
 | :--- | :--- |
+| `Tab` | Cycle through Main, Direct, and Groups tabs |
+| `1` / `2` / `3` | Directly select Main, Direct, or Groups tab |
 | `j` / `Down` | Move down through messages |
 | `k` / `Up` | Move up through messages |
 | `g` / `Home` | Jump back to live streaming view |
 | `G` / `End` | Jump to oldest message in memory |
-| `l` / `L` | Like (❤️) the selected message |
-| `r` | Reply (💬) to selected message |
+| `l` / `L` | Like (+1) the selected message |
+| `r` | Reply to selected message |
 | `R` / `F2` | Turn local relay on / off (`0.0.0.0:4869`) |
 | `i` / `Enter` | Start typing a message |
 | `Enter` (while typing) | Send message or run command |
 | `Esc` | Cancel typing / return to navigation |
-| `s` | Display your shareable address |
+| `s` | Display your shareable address &amp; Safe Ticket |
 | `b` | Reconnect to all saved bookmarks |
 | `c` | Clear message feed |
 | `q` / `Ctrl+C` | Quit DEADAIR |

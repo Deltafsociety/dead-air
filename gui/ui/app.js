@@ -1,13 +1,18 @@
-// DEADAIR GUI Desktop Client
+// DEADAIR GUI Desktop Client // Emoji-Free Sovereign Edition
 (function () {
   let state = {
+    activeTab: 'main', // 'main' | 'direct' | 'group'
     replyingTo: null,
+    attachedImage: null, // { dataUri, name }
     stationNotes: [],
+    directNotes: [],
+    groupNotes: [],
     relays: [],
     peers: [],
     bookmarks: [],
     identity: { name: 'anon', pubkey: '', npub: '' },
     shareAddress: 'ws://127.0.0.1:4869',
+    safeTicket: '',
     detectedIp: '127.0.0.1',
     relayActive: true,
     outboxCount: 0,
@@ -20,22 +25,35 @@
   const notesContainer = document.getElementById('notes-container');
   const noteInput = document.getElementById('note-input');
   const sendBtn = document.getElementById('send-btn');
-  const tabStationBtn = document.getElementById('tab-station-btn');
+  const tabMainBtn = document.getElementById('tab-main-btn');
+  const tabDirectBtn = document.getElementById('tab-direct-btn');
+  const tabGroupsBtn = document.getElementById('tab-groups-btn');
+  const mainBadgeCount = document.getElementById('main-badge-count');
+  const directBadgeCount = document.getElementById('direct-badge-count');
+  const groupsBadgeCount = document.getElementById('groups-badge-count');
+  const directBar = document.getElementById('direct-bar');
+  const directRecipientInput = document.getElementById('direct-recipient-input');
+  const groupBar = document.getElementById('group-bar');
+  const groupChannelInput = document.getElementById('group-channel-input');
+  const attachImgBtn = document.getElementById('attach-img-btn');
+  const imageFileInput = document.getElementById('image-file-input');
+  const imagePreviewBanner = document.getElementById('image-preview-banner');
+  const imagePreviewThumb = document.getElementById('image-preview-thumb');
+  const imagePreviewName = document.getElementById('image-preview-name');
+  const cancelImageBtn = document.getElementById('cancel-image-btn');
   const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
   const sidebar = document.getElementById('station-sidebar');
   const handleBadge = document.getElementById('handle-badge');
   const handleText = document.getElementById('handle-text');
   const relayPill = document.getElementById('relay-pill');
   const relayText = document.getElementById('relay-text');
-  const sharePill = document.getElementById('share-pill');
-  const shareText = document.getElementById('share-text');
+  const ticketPill = document.getElementById('ticket-pill');
   const replyBanner = document.getElementById('reply-banner');
   const replyTargetName = document.getElementById('reply-target-name');
   const cancelReplyBtn = document.getElementById('cancel-reply-btn');
   const clearFeedBtn = document.getElementById('clear-feed-btn');
   const resumeStreamBtn = document.getElementById('resume-stream-btn');
   const streamLabel = document.getElementById('stream-label');
-  const stationBadgeCount = document.getElementById('station-badge-count');
   const toastEl = document.getElementById('toast-notification');
   const specIp = document.getElementById('spec-ip');
   const specNpub = document.getElementById('spec-npub');
@@ -44,6 +62,14 @@
   const relaysList = document.getElementById('relays-list');
   const bmUrlInput = document.getElementById('bm-url-input');
   const addBmBtn = document.getElementById('add-bm-btn');
+
+  // Modal elements
+  const ticketModal = document.getElementById('ticket-modal');
+  const modalTicketText = document.getElementById('modal-ticket-text');
+  const modalCopyTicketBtn = document.getElementById('modal-copy-ticket-btn');
+  const modalCloseTicketBtn = document.getElementById('modal-close-ticket-btn');
+  const modalImportTicketInput = document.getElementById('modal-import-ticket-input');
+  const modalConnectTicketBtn = document.getElementById('modal-connect-ticket-btn');
 
   const isTauri = typeof window !== 'undefined' && window.__TAURI__ && window.__TAURI__.core;
 
@@ -87,6 +113,8 @@
     escaped = escaped.replace(/(#[a-zA-Z0-9_]+)/g, '<span class="hashtag">$1</span>');
     // Mentions & npubs
     escaped = escaped.replace(/(@[a-zA-Z0-9_]+|nostr:npub1[a-z0-9]+|npub1[a-z0-9]+)/g, '<span class="mention">$1</span>');
+    // Safe ticket links
+    escaped = escaped.replace(/(deadair:\/\/[a-zA-Z0-9+/=]+)/g, '<span class="safe-ticket-link" style="color: #ffea00; font-weight: bold; cursor: pointer;">$1</span>');
     // URLs
     escaped = escaped.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     return escaped;
@@ -99,23 +127,43 @@
 
     const color = AVATAR_COLORS[note.color_idx % AVATAR_COLORS.length] || '#00e5ff';
 
+    // Picture check
+    let imageHtml = '';
+    let textContent = note.content;
+
+    if (note.is_image || note.content.includes('data:image/') || note.content.startsWith('![')) {
+      const match = note.content.match(/!\[(.*?)\]\((.*?)\)/);
+      if (match) {
+        const caption = match[1] || 'attached image';
+        const src = match[2];
+        imageHtml = `
+          <div style="margin: 8px 0; border: 1px solid #282e3f; border-radius: 4px; overflow: hidden; max-width: 420px; background: #000;">
+            <img src="${src}" alt="${escapeHtml(caption)}" style="width: 100%; max-height: 280px; object-fit: contain; display: block; cursor: pointer;" onclick="window.open(this.src)">
+            <div style="font-size: 0.75rem; color: #7f8a9f; padding: 4px 8px; background: #141720;">PICTURE: ${escapeHtml(caption)}</div>
+          </div>
+        `;
+        textContent = ''; // Picture displayed visually
+      }
+    }
+
     card.innerHTML = `
       <div class="note-header">
         <span class="author-dot" style="background-color: ${color};"></span>
         <span class="author-name">${escapeHtml(note.author_name)}</span>
         <span class="author-handle">${escapeHtml(note.handle)}</span>
-        <span class="bullet">•</span>
+        <span class="bullet">|</span>
         <span class="note-time" data-ts="${note.created_at}">${note.relative_time}</span>
-        <span class="station-badge">DEADAIR</span>
+        <span class="station-badge">${note.tab ? note.tab.toUpperCase() : 'DEADAIR'}</span>
       </div>
-      <div class="note-content">${formatContent(note.content)}</div>
+      ${imageHtml}
+      ${textContent ? `<div class="note-content">${formatContent(textContent)}</div>` : ''}
       <div class="note-footer">
         <button class="action-btn btn-reply" data-id="${note.id}" data-pubkey="${note.pubkey}" data-author="${escapeHtml(note.author_name)}">
-          💬 <span>${note.replies}</span> Reply
+          [RE: <span>${note.replies}</span>] Reply
         </button>
-        <span class="action-btn">🔁 <span>${note.reposts}</span></span>
+        <span class="action-btn">[RP: <span>${note.reposts}</span>]</span>
         <button class="action-btn btn-like ${note.is_liked_by_me ? 'liked' : ''}" data-id="${note.id}" data-pubkey="${note.pubkey}">
-          ❤️ <span>${note.likes}</span> ${note.is_liked_by_me ? 'Liked' : 'Like'}
+          [+1: <span>${note.likes}</span>] ${note.is_liked_by_me ? 'Liked' : 'Like'}
         </button>
       </div>
     `;
@@ -123,20 +171,37 @@
     return card;
   }
 
+  function getActiveNotes() {
+    if (state.activeTab === 'direct') {
+      return state.directNotes;
+    } else if (state.activeTab === 'group') {
+      return state.groupNotes;
+    }
+    return state.stationNotes;
+  }
+
   function updateTimeline() {
     notesContainer.innerHTML = '';
+    const currentList = getActiveNotes();
 
-    if (state.stationNotes.length === 0) {
+    if (currentList.length === 0) {
+      let emptyMsg = 'No transmissions on DEADAIR main mesh yet. Broadcast below.';
+      if (state.activeTab === 'direct') {
+        emptyMsg = 'No direct private messages yet. Type recipient above and transmit.';
+      } else if (state.activeTab === 'group') {
+        emptyMsg = `No notes in #${escapeHtml(groupChannelInput.value)} group channel yet.`;
+      }
+
       notesContainer.innerHTML = `
         <div class="empty-state" style="margin-top: 40px; font-size: 0.9rem;">
-          No transmissions on DEADAIR station yet. Type below to broadcast across your intranet mesh.
+          ${emptyMsg}
         </div>
       `;
       return;
     }
 
     const fragment = document.createDocumentFragment();
-    state.stationNotes.forEach((note) => {
+    currentList.forEach((note) => {
       fragment.appendChild(renderNoteCard(note));
     });
     notesContainer.appendChild(fragment);
@@ -146,290 +211,408 @@
     }
   }
 
+  function switchTab(newTab) {
+    state.activeTab = newTab;
+    tabMainBtn.classList.toggle('active', newTab === 'main');
+    tabDirectBtn.classList.toggle('active', newTab === 'direct');
+    tabGroupsBtn.classList.toggle('active', newTab === 'group');
+
+    directBar.style.display = (newTab === 'direct') ? 'flex' : 'none';
+    groupBar.style.display = (newTab === 'group') ? 'flex' : 'none';
+
+    updateTimeline();
+  }
+
   function updateSidebar() {
     specIp.textContent = state.detectedIp;
-    specNpub.textContent = state.identity.npub || 'loading...';
+    specNpub.textContent = state.identity.npub ? (state.identity.npub.slice(0, 10) + '...' + state.identity.npub.slice(-4)) : 'offline';
     specOutbox.textContent = `${state.outboxCount} pending`;
 
-    // Peers
-    document.getElementById('peer-count').textContent = state.peers.length;
+    mainBadgeCount.textContent = state.stationNotes.length;
+    directBadgeCount.textContent = state.directNotes.length;
+    groupsBadgeCount.textContent = state.groupNotes.length;
+
+    // Discovered Peers
+    const peerCountEl = document.getElementById('peer-count');
+    peerCountEl.textContent = state.peers.length;
+
     if (state.peers.length === 0) {
-      peersList.innerHTML = '<div class="empty-state">No UDP peers discovered yet</div>';
+      peersList.innerHTML = '<div class="empty-state">Searching local UDP &amp; mesh relays...</div>';
     } else {
-      peersList.innerHTML = state.peers
-        .map((p) => `<div class="peer-item"><span>● ${escapeHtml(p.name)}</span><span style="color:var(--text-dim);">${escapeHtml(p.ws_url)}</span></div>`)
-        .join('');
-    }
-
-    // Relays
-    document.getElementById('relay-count').textContent = state.relays.length;
-    if (state.relays.length === 0) {
-      relaysList.innerHTML = '<div class="empty-state">No relays connected</div>';
-    } else {
-      relaysList.innerHTML = state.relays
-        .map((r) => `
-          <div class="relay-item">
-            <span style="color:${r.connected ? 'var(--accent-green)' : 'var(--text-dim)'};">
-              ${r.connected ? '🟢' : '⚪'} ${escapeHtml(r.url)}
-            </span>
-            ${r.latency_ms != null ? `<span style="color:var(--text-dim);">${r.latency_ms}ms</span>` : ''}
+      peersList.innerHTML = '';
+      state.peers.forEach((peer) => {
+        const item = document.createElement('div');
+        item.className = 'peer-item';
+        item.style.padding = '6px 8px';
+        item.style.borderBottom = '1px solid #1a1e2a';
+        item.style.display = 'flex';
+        item.style.justifyContent = 'space-between';
+        item.style.alignItems = 'center';
+        item.style.fontSize = '0.8rem';
+        item.innerHTML = `
+          <div>
+            <span style="color: var(--accent-cyan); font-weight: bold;">${escapeHtml(peer.name)}</span>
+            <div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(peer.ws_url)}</div>
           </div>
-        `)
-        .join('');
+          <button class="btn-micro select-peer-btn" data-url="${escapeHtml(peer.ws_url)}" data-name="${escapeHtml(peer.name)}" style="font-size: 0.7rem; padding: 2px 6px;">DM</button>
+        `;
+        peersList.appendChild(item);
+      });
+    }
+
+    // Connected Relays & Bookmarks
+    const relayCountEl = document.getElementById('relay-count');
+    relayCountEl.textContent = state.relays.length;
+
+    if (state.relays.length === 0) {
+      relaysList.innerHTML = '<div class="empty-state">No relays configured</div>';
+    } else {
+      relaysList.innerHTML = '';
+      state.relays.forEach((relay) => {
+        const item = document.createElement('div');
+        item.className = 'relay-item';
+        item.style.padding = '6px 8px';
+        item.style.borderBottom = '1px solid #1a1e2a';
+        item.style.display = 'flex';
+        item.style.justifyContent = 'space-between';
+        item.style.alignItems = 'center';
+        item.style.fontSize = '0.8rem';
+        const statusColor = relay.connected ? 'var(--accent-green)' : 'var(--accent-red)';
+        const latency = relay.latency_ms ? ` (${relay.latency_ms}ms)` : '';
+        item.innerHTML = `
+          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;">
+            <span style="color: ${statusColor}; font-weight: bold;">${relay.connected ? '[+]' : '[-]'}</span>
+            <span style="color: #fff;">${escapeHtml(relay.url)}</span>
+            <span style="font-size: 0.7rem; color: var(--text-dim);">${latency}</span>
+          </div>
+          <button class="btn-micro remove-bm-btn" data-url="${escapeHtml(relay.url)}" style="color: var(--accent-red); font-size: 0.7rem;">Del</button>
+        `;
+        relaysList.appendChild(item);
+      });
     }
   }
 
-  function setReplyContext(id, pubkey, author) {
-    state.replyingTo = { id, pubkey, author };
-    replyTargetName.textContent = `@${author}`;
-    replyBanner.style.display = 'flex';
-    noteInput.focus();
+  async function loadInitialState() {
+    try {
+      const data = await invoke('get_state');
+      if (data) {
+        state.identity.name = data.name;
+        state.identity.pubkey = data.pubkey;
+        state.identity.npub = data.npub;
+        state.shareAddress = data.share_address;
+        state.safeTicket = data.safe_ticket;
+        state.detectedIp = data.detected_ip;
+        state.relayActive = data.relay_active;
+        state.outboxCount = data.outbox_count;
+        state.stationNotes = data.station_notes || [];
+        state.directNotes = data.direct_notes || [];
+        state.groupNotes = data.group_notes || [];
+        state.bookmarks = data.bookmarks || [];
+        state.relays = data.relays || [];
+        state.peers = data.peers || [];
+
+        handleText.textContent = state.identity.name;
+        relayText.textContent = state.relayActive ? `ACTIVE :${data.relay_port}` : 'OFF';
+        relayPill.classList.toggle('active', state.relayActive);
+
+        updateTimeline();
+        updateSidebar();
+      }
+    } catch (e) {
+      console.error('Failed to load initial state:', e);
+    }
   }
 
-  function clearReplyContext() {
+  // Handle Send Note / Picture
+  async function handleSend() {
+    const text = noteInput.value.trim();
+
+    if (!text && !state.attachedImage) {
+      return;
+    }
+
+    sendBtn.disabled = true;
+    try {
+      const targetTab = state.activeTab;
+      const groupName = groupChannelInput.value.trim();
+      const recipient = directRecipientInput.value.trim();
+
+      if (state.attachedImage) {
+        await invoke('send_image', {
+          dataUri: state.attachedImage.dataUri,
+          caption: text || state.attachedImage.name,
+          tab: targetTab,
+          group: (targetTab === 'group') ? groupName : null,
+          recipient: (targetTab === 'direct') ? recipient : null,
+        });
+        state.attachedImage = null;
+        imagePreviewBanner.style.display = 'none';
+      } else {
+        await invoke('send_note', {
+          text,
+          replyToId: state.replyingTo ? state.replyingTo.id : null,
+          replyToPubkey: state.replyingTo ? state.replyingTo.pubkey : null,
+          tab: targetTab,
+          group: (targetTab === 'group') ? groupName : null,
+          recipient: (targetTab === 'direct') ? recipient : null,
+        });
+      }
+
+      noteInput.value = '';
+      cancelReply();
+      showToast('Transmission broadcasted to mesh');
+      await loadInitialState();
+    } catch (e) {
+      showToast(`Transmit error: ${e}`);
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  function cancelReply() {
     state.replyingTo = null;
     replyBanner.style.display = 'none';
   }
 
-  async function handleSend() {
-    const text = noteInput.value.trim();
-    if (!text) return;
+  // Setup Event Listeners
+  function initListeners() {
+    tabMainBtn.addEventListener('click', () => switchTab('main'));
+    tabDirectBtn.addEventListener('click', () => switchTab('direct'));
+    tabGroupsBtn.addEventListener('click', () => switchTab('group'));
 
-    if (text.startsWith('/')) {
-      handleCommand(text);
-      noteInput.value = '';
-      return;
-    }
-
-    try {
-      const replyId = state.replyingTo ? state.replyingTo.id : null;
-      const replyPk = state.replyingTo ? state.replyingTo.pubkey : null;
-
-      const note = await invoke('send_note', {
-        text,
-        replyToId: replyId,
-        replyToPubkey: replyPk,
-      });
-
-      noteInput.value = '';
-      clearReplyContext();
-
-      if (note) {
-        state.stationNotes.push(note);
-        stationBadgeCount.textContent = state.stationNotes.length;
-        updateTimeline();
-        showToast('Transmitted note across DEADAIR network');
+    sendBtn.addEventListener('click', handleSend);
+    noteInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
       }
-    } catch (err) {
-      showToast(`Error: ${err}`);
-    }
-  }
+    });
 
-  async function handleCommand(cmd) {
-    const parts = cmd.split(' ');
-    if (parts[0] === '/name' && parts[1]) {
-      const newName = parts.slice(1).join(' ');
+    // Picture attachment
+    attachImgBtn.addEventListener('click', () => {
+      imageFileInput.click();
+    });
+
+    imageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('Image too large (>2MB). Please pick a smaller image.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        state.attachedImage = {
+          dataUri: event.target.result,
+          name: file.name,
+        };
+        imagePreviewThumb.src = event.target.result;
+        imagePreviewName.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+        imagePreviewBanner.style.display = 'flex';
+      };
+      reader.readAsDataURL(file);
+    });
+
+    cancelImageBtn.addEventListener('click', () => {
+      state.attachedImage = null;
+      imagePreviewBanner.style.display = 'none';
+      imageFileInput.value = '';
+    });
+
+    // Handle rename station
+    handleBadge.addEventListener('click', async () => {
+      const newName = prompt('Enter new station handle (no spaces):', state.identity.name);
+      if (newName && newName.trim()) {
+        try {
+          const res = await invoke('set_station_name', { newName: newName.trim() });
+          state.identity.name = res;
+          handleText.textContent = res;
+          showToast(`Station handle updated to ${res}`);
+        } catch (e) {
+          showToast(`Error: ${e}`);
+        }
+      }
+    });
+
+    // Toggle relay
+    relayPill.addEventListener('click', async () => {
       try {
-        const updated = await invoke('set_station_name', { newName });
-        state.identity.name = updated;
-        handleText.textContent = updated;
-        showToast(`Station handle updated to ${updated}`);
-      } catch (err) {
-        showToast(`Error: ${err}`);
+        const active = await invoke('toggle_embedded_relay');
+        state.relayActive = active;
+        relayPill.classList.toggle('active', active);
+        relayText.textContent = active ? 'ACTIVE :4869' : 'OFF';
+        showToast(active ? 'Relay started on :4869' : 'Relay stopped');
+      } catch (e) {
+        showToast(`Relay error: ${e}`);
       }
-    } else if (parts[0] === '/clear') {
+    });
+
+    // Safe Ticket Modal
+    ticketPill.addEventListener('click', async () => {
+      try {
+        const ticket = await invoke('get_safe_ticket');
+        state.safeTicket = ticket || state.shareAddress;
+        modalTicketText.value = state.safeTicket;
+        ticketModal.style.display = 'flex';
+      } catch (e) {
+        showToast(`Ticket error: ${e}`);
+      }
+    });
+
+    modalCloseTicketBtn.addEventListener('click', () => {
+      ticketModal.style.display = 'none';
+    });
+
+    modalCopyTicketBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(modalTicketText.value);
+      showToast('Safe ticket copied to clipboard');
+    });
+
+    modalConnectTicketBtn.addEventListener('click', async () => {
+      const code = modalImportTicketInput.value.trim();
+      if (!code) return;
+      try {
+        const ticket = await invoke('connect_safe_ticket', { code });
+        showToast(`Connected & bookmarked: ${ticket.name} [${ticket.ws}]`);
+        modalImportTicketInput.value = '';
+        ticketModal.style.display = 'none';
+        await loadInitialState();
+      } catch (e) {
+        showToast(`Connection failed: ${e}`);
+      }
+    });
+
+    // Add Bookmark
+    addBmBtn.addEventListener('click', async () => {
+      const val = bmUrlInput.value.trim();
+      if (!val) return;
+      try {
+        await invoke('add_bookmark', { target: val, name: null });
+        bmUrlInput.value = '';
+        showToast('Node connected & added to bookmarks');
+        await loadInitialState();
+      } catch (e) {
+        showToast(`Bookmark error: ${e}`);
+      }
+    });
+
+    // Clear feed
+    clearFeedBtn.addEventListener('click', async () => {
       await invoke('clear_timeline');
       state.stationNotes = [];
+      state.directNotes = [];
+      state.groupNotes = [];
       updateTimeline();
-      showToast('Timeline cleared');
-    } else if (parts[0] === '/help') {
-      showToast('Commands: /name <handle> | /clear | /help');
-    }
-  }
-
-  // Event Listeners
-  sendBtn.addEventListener('click', handleSend);
-  noteInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  });
-
-  if (tabStationBtn) {
-    tabStationBtn.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      updateTimeline();
+      showToast('Feed cleared');
     });
-  }
 
-  if (sidebarToggleBtn) {
-    sidebarToggleBtn.addEventListener('click', () => sidebar.classList.toggle('open'));
-  }
+    cancelReplyBtn.addEventListener('click', cancelReply);
 
-  cancelReplyBtn.addEventListener('click', clearReplyContext);
+    // Sidebar Mobile toggle
+    sidebarToggleBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+    });
 
-  clearFeedBtn.addEventListener('click', async () => {
-    await invoke('clear_timeline');
-    state.stationNotes = [];
-    updateTimeline();
-  });
-
-  resumeStreamBtn.addEventListener('click', () => {
-    state.autoScroll = true;
-    resumeStreamBtn.style.display = 'none';
-    streamLabel.textContent = 'LIVE STREAMING';
-    notesContainer.scrollTop = notesContainer.scrollHeight;
-  });
-
-  notesContainer.addEventListener('scroll', () => {
-    const atBottom = notesContainer.scrollHeight - notesContainer.scrollTop <= notesContainer.clientHeight + 40;
-    if (!atBottom && state.autoScroll) {
-      state.autoScroll = false;
-      resumeStreamBtn.style.display = 'inline-block';
-      streamLabel.textContent = 'PAUSED';
-    } else if (atBottom && !state.autoScroll) {
-      state.autoScroll = true;
-      resumeStreamBtn.style.display = 'none';
-      streamLabel.textContent = 'LIVE STREAMING';
-    }
-  });
-
-  notesContainer.addEventListener('click', async (e) => {
-    const replyBtn = e.target.closest('.btn-reply');
-    if (replyBtn) {
-      const id = replyBtn.dataset.id;
-      const pubkey = replyBtn.dataset.pubkey;
-      const author = replyBtn.dataset.author;
-      setReplyContext(id, pubkey, author);
-      return;
-    }
-
-    const likeBtn = e.target.closest('.btn-like');
-    if (likeBtn) {
-      const id = likeBtn.dataset.id;
-      const pubkey = likeBtn.dataset.pubkey;
-      try {
-        const liked = await invoke('like_note', { eventIdHex: id, authorPubkeyHex: pubkey });
-        if (liked) {
-          likeBtn.classList.add('liked');
-          const countSpan = likeBtn.querySelector('span');
-          if (countSpan) countSpan.textContent = parseInt(countSpan.textContent || '0', 10) + 1;
-          showToast('Liked note ❤️');
+    // Delegated click for Likes and Replies
+    notesContainer.addEventListener('click', async (e) => {
+      const likeBtn = e.target.closest('.btn-like');
+      if (likeBtn) {
+        const id = likeBtn.dataset.id;
+        const pubkey = likeBtn.dataset.pubkey;
+        try {
+          const liked = await invoke('like_note', { eventIdHex: id, authorPubkeyHex: pubkey });
+          if (liked) {
+            showToast('Liked [+1]');
+            await loadInitialState();
+          }
+        } catch (err) {
+          showToast(`Like error: ${err}`);
         }
-      } catch (err) {
-        showToast(`Error: ${err}`);
+        return;
       }
-    }
-  });
 
-  handleBadge.addEventListener('click', async () => {
-    const newName = prompt('Enter new station handle:', state.identity.name);
-    if (newName && newName.trim()) {
-      handleCommand(`/name ${newName.trim()}`);
-    }
-  });
-
-  relayPill.addEventListener('click', async () => {
-    try {
-      const active = await invoke('toggle_embedded_relay');
-      state.relayActive = active;
-      relayPill.classList.toggle('active', active);
-      relayText.textContent = active ? 'ACTIVE :4869' : 'OFF';
-      showToast(active ? 'Relay started on :4869' : 'Relay stopped');
-    } catch (err) {
-      showToast(`Error: ${err}`);
-    }
-  });
-
-  sharePill.addEventListener('click', () => {
-    navigator.clipboard.writeText(state.shareAddress).then(() => {
-      showToast(`Copied ${state.shareAddress} to clipboard`);
-    }).catch(() => {
-      showToast(state.shareAddress);
+      const replyBtn = e.target.closest('.btn-reply');
+      if (replyBtn) {
+        state.replyingTo = {
+          id: replyBtn.dataset.id,
+          pubkey: replyBtn.dataset.pubkey,
+          author: replyBtn.dataset.author,
+        };
+        replyTargetName.textContent = `@${state.replyingTo.author}`;
+        replyBanner.style.display = 'flex';
+        noteInput.focus();
+        return;
+      }
     });
-  });
 
-  addBmBtn.addEventListener('click', async () => {
-    const url = bmUrlInput.value.trim();
-    if (!url) return;
-    try {
-      const updated = await invoke('add_bookmark', { url, name: 'node' });
-      state.bookmarks = updated;
-      bmUrlInput.value = '';
-      showToast(`Added bookmark ${url}`);
-      loadState();
-    } catch (err) {
-      showToast(`Error: ${err}`);
-    }
-  });
+    // Delegated click for Peer DM button
+    peersList.addEventListener('click', (e) => {
+      const dmBtn = e.target.closest('.select-peer-btn');
+      if (dmBtn) {
+        switchTab('direct');
+        directRecipientInput.value = dmBtn.dataset.name || dmBtn.dataset.url;
+        noteInput.focus();
+      }
+    });
 
-  // Load initial state
-  async function loadState() {
-    try {
-      const res = await invoke('get_state');
-      if (!res) return;
+    // Delegated click for Remove Bookmark
+    relaysList.addEventListener('click', async (e) => {
+      const removeBtn = e.target.closest('.remove-bm-btn');
+      if (removeBtn) {
+        const url = removeBtn.dataset.url;
+        try {
+          await invoke('remove_bookmark', { url });
+          showToast(`Removed ${url}`);
+          await loadInitialState();
+        } catch (err) {
+          showToast(`Error: ${err}`);
+        }
+      }
+    });
 
-      state.identity = { name: res.name, pubkey: res.pubkey, npub: res.npub };
-      state.relayActive = res.relay_active;
-      state.shareAddress = res.share_address;
-      state.detectedIp = res.detected_ip;
-      state.outboxCount = res.outbox_count;
-      state.stationNotes = res.station_notes || [];
-      state.bookmarks = res.bookmarks || [];
-      state.relays = res.relays || [];
-      state.peers = res.peers || [];
+    // Listen for Tauri backend broadcast events
+    if (isTauri && window.__TAURI__.event) {
+      window.__TAURI__.event.listen('station_note', (event) => {
+        state.stationNotes.push(event.payload);
+        if (state.activeTab === 'main') updateTimeline();
+      });
 
-      handleText.textContent = res.name;
-      shareText.textContent = res.share_address;
-      relayPill.classList.toggle('active', res.relay_active);
-      relayText.textContent = res.relay_active ? `ACTIVE :${res.relay_port}` : 'OFF';
+      window.__TAURI__.event.listen('direct_note', (event) => {
+        state.directNotes.push(event.payload);
+        showToast(`New Direct Message from ${event.payload.author_name}`);
+        if (state.activeTab === 'direct') updateTimeline();
+        directBadgeCount.textContent = state.directNotes.length;
+      });
 
-      stationBadgeCount.textContent = state.stationNotes.length;
+      window.__TAURI__.event.listen('group_note', (event) => {
+        state.groupNotes.push(event.payload);
+        if (state.activeTab === 'group') updateTimeline();
+        groupsBadgeCount.textContent = state.groupNotes.length;
+      });
 
-      updateTimeline();
-      updateSidebar();
-    } catch (err) {
-      console.error('Failed to load state:', err);
+      window.__TAURI__.event.listen('peer_discovered', (event) => {
+        const peer = event.payload;
+        if (!state.peers.some((p) => p.ws_url === peer.ws_url)) {
+          state.peers.push(peer);
+          showToast(`Mesh peer discovered: ${peer.name}`);
+          updateSidebar();
+        }
+      });
+
+      window.__TAURI__.event.listen('ip_updated', (event) => {
+        const [ip, share] = event.payload;
+        state.detectedIp = ip;
+        state.shareAddress = share;
+        updateSidebar();
+      });
     }
   }
-
-  // Setup Tauri Event Listeners
-  if (isTauri && window.__TAURI__.event) {
-    window.__TAURI__.event.listen('station_note', (event) => {
-      state.stationNotes.push(event.payload);
-      stationBadgeCount.textContent = state.stationNotes.length;
-      notesContainer.appendChild(renderNoteCard(event.payload));
-      if (state.autoScroll) notesContainer.scrollTop = notesContainer.scrollHeight;
-    });
-
-    window.__TAURI__.event.listen('peer_discovered', (event) => {
-      state.peers.push(event.payload);
-      updateSidebar();
-      showToast(`Discovered LAN peer ${event.payload.name}`);
-    });
-
-    window.__TAURI__.event.listen('ip_updated', (event) => {
-      const [ip, share] = event.payload;
-      state.detectedIp = ip;
-      state.shareAddress = share;
-      shareText.textContent = share;
-      specIp.textContent = ip;
-    });
-
-    window.__TAURI__.event.listen('metrics_updated', () => {
-      loadState();
-    });
-  }
-
-  // Periodic relative time update
-  setInterval(() => {
-    document.querySelectorAll('.note-time').forEach((el) => {
-      const ts = parseInt(el.dataset.ts, 10);
-      if (ts) el.textContent = formatRelativeTime(ts);
-    });
-  }, 10000);
 
   // Initialize
-  loadState();
+  document.addEventListener('DOMContentLoaded', () => {
+    loadInitialState();
+    initListeners();
+  });
 })();

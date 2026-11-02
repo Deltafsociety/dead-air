@@ -6,4 +6,5 @@ pub mod identity;
 pub mod net_info;
 pub mod outbox;
 pub mod relay;
+pub mod ticket;
 pub mod ui;

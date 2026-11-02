@@ -13,6 +13,7 @@ crate-type = ["rlib"]
 tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
+base64 = "0.22"
 deadair = { path = "../.." }
 nostr = { version = "0.45.5", features = ["os-rng", "rand"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring"] }
