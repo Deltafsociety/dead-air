@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -21,13 +21,21 @@ pub const DEFAULT_PUBLIC_RELAYS: &[&str] = &[
     "wss://relay.primal.net",
 ];
 
+#[derive(Clone, Debug, Default)]
+pub struct ProfileInfo {
+    pub name: Option<String>,
+    pub display_name: Option<String>,
+    pub nip05: Option<String>,
+    pub about: Option<String>,
+}
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ActiveTab {
     Station,
     Public,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum InputMode {
     Normal,
     Editing,
@@ -48,6 +56,13 @@ pub struct App {
     pub timeline: Vec<Event>,
     pub public_timeline: Vec<Event>,
     pub profiles: HashMap<PublicKey, String>,
+    pub profile_details: HashMap<PublicKey, ProfileInfo>,
+    pub post_likes: HashMap<EventId, usize>,
+    pub post_replies: HashMap<EventId, usize>,
+    pub post_reposts: HashMap<EventId, usize>,
+    pub my_likes: HashSet<EventId>,
+    pub selected_public_index: Option<usize>,
+    pub replying_to: Option<Event>,
     pub discovered_peers: Vec<PeerNode>,
     pub relay_statuses: Vec<RelayStatus>,
     pub public_relays_active: bool,
@@ -122,6 +137,13 @@ impl App {
             timeline: Vec::new(),
             public_timeline: Vec::new(),
             profiles,
+            profile_details: HashMap::new(),
+            post_likes: HashMap::new(),
+            post_replies: HashMap::new(),
+            post_reposts: HashMap::new(),
+            my_likes: HashSet::new(),
+            selected_public_index: None,
+            replying_to: None,
             discovered_peers: Vec::new(),
             relay_statuses: Vec::new(),
             public_relays_active: false,
@@ -155,12 +177,32 @@ impl App {
         while let Ok((event, source_url)) = self.inbound_event_rx.try_recv() {
             if event.kind == Kind::Metadata {
                 if let Ok(meta) = Metadata::from_json(&event.content) {
-                    if let Some(name) = meta.name.or(meta.display_name) {
+                    let display = meta.display_name.clone().or_else(|| meta.name.clone());
+                    if let Some(name) = display {
                         self.profiles.insert(event.pubkey, name);
                     }
+                    self.profile_details.insert(event.pubkey, ProfileInfo {
+                        name: meta.name,
+                        display_name: meta.display_name,
+                        nip05: meta.nip05,
+                        about: meta.about,
+                    });
+                }
+            } else if event.kind == Kind::Reaction {
+                for target_id in event.tags.event_ids() {
+                    *self.post_likes.entry(target_id).or_insert(0) += 1;
+                }
+            } else if event.kind == Kind::Repost {
+                for target_id in event.tags.event_ids() {
+                    *self.post_reposts.entry(target_id).or_insert(0) += 1;
                 }
             } else if event.kind == Kind::TextNote {
                 self.outbox.remove(&event.id);
+
+                for target_id in event.tags.event_ids() {
+                    *self.post_replies.entry(target_id).or_insert(0) += 1;
+                }
+
                 if self.is_deadair_event(&event, Some(&source_url)) {
                     if !self.timeline.iter().any(|e| e.id == event.id) {
                         self.timeline.push(event);
@@ -230,7 +272,7 @@ impl App {
             if url == "embedded" || url.contains("127.0.0.1") || url.contains("localhost") {
                 return true;
             }
-            let is_public = DEFAULT_PUBLIC_RELAYS.iter().any(|&pub_url| url == pub_url);
+            let is_public = DEFAULT_PUBLIC_RELAYS.contains(&url);
             if !is_public {
                 return true;
             }
@@ -249,7 +291,56 @@ impl App {
             InputMode::Normal => match key.code {
                 KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('i') | KeyCode::Enter => self.input_mode = InputMode::Editing,
-                KeyCode::Char('r') | KeyCode::F(2) => self.toggle_relay().await,
+                KeyCode::Char('r') => {
+                    if self.active_tab == ActiveTab::Public && !self.public_timeline.is_empty() {
+                        self.start_reply_to_selected();
+                    } else {
+                        self.toggle_relay().await;
+                    }
+                }
+                KeyCode::Char('R') | KeyCode::F(2) => self.toggle_relay().await,
+                KeyCode::Char('l') | KeyCode::Char('L') => {
+                    self.like_selected_post().await;
+                }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    if self.active_tab == ActiveTab::Public && !self.public_timeline.is_empty() {
+                        match self.selected_public_index {
+                            None => {
+                                self.selected_public_index = Some(self.public_timeline.len().saturating_sub(1));
+                            }
+                            Some(cur) => {
+                                if cur + 1 < self.public_timeline.len() {
+                                    self.selected_public_index = Some(cur + 1);
+                                }
+                            }
+                        }
+                    }
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    if self.active_tab == ActiveTab::Public && !self.public_timeline.is_empty() {
+                        match self.selected_public_index {
+                            None => {
+                                self.selected_public_index = Some(self.public_timeline.len().saturating_sub(2));
+                            }
+                            Some(cur) => {
+                                if cur > 0 {
+                                    self.selected_public_index = Some(cur - 1);
+                                }
+                            }
+                        }
+                    }
+                }
+                KeyCode::Char('g') | KeyCode::Home => {
+                    if self.active_tab == ActiveTab::Public {
+                        self.selected_public_index = None;
+                        self.status_toast = Some(("Resumed live stream".to_string(), Instant::now()));
+                    }
+                }
+                KeyCode::Char('G') | KeyCode::End => {
+                    if self.active_tab == ActiveTab::Public && !self.public_timeline.is_empty() {
+                        self.selected_public_index = Some(0);
+                    }
+                }
                 KeyCode::Char('p') => self.toggle_public_relays().await,
                 KeyCode::Char('b') => self.connect_bookmarks().await,
                 KeyCode::Char('s') => self.show_share_toast(),
@@ -261,6 +352,7 @@ impl App {
                         }
                         ActiveTab::Public => {
                             self.public_timeline.clear();
+                            self.selected_public_index = None;
                             self.status_toast = Some(("Public feed cleared".to_string(), Instant::now()));
                         }
                     }
@@ -286,12 +378,23 @@ impl App {
                     self.active_tab = ActiveTab::Public;
                     self.status_toast = Some(("Switched to Public Relays tab".to_string(), Instant::now()));
                 }
+                KeyCode::Esc => {
+                    if self.selected_public_index.is_some() {
+                        self.selected_public_index = None;
+                        self.status_toast = Some(("Resumed live stream".to_string(), Instant::now()));
+                    }
+                }
                 _ => {}
             },
             InputMode::Editing => match key.code {
                 KeyCode::Enter => self.submit_input().await,
-                KeyCode::Esc => self.input_mode = InputMode::Normal,
-                KeyCode::Tab => self.input_mode = InputMode::Normal,
+                KeyCode::Esc => {
+                    self.input_mode = InputMode::Normal;
+                    self.replying_to = None;
+                }
+                KeyCode::Tab => {
+                    self.input_mode = InputMode::Normal;
+                }
                 KeyCode::Backspace => {
                     self.input_buffer.pop();
                 }
@@ -303,23 +406,84 @@ impl App {
         }
     }
 
-    async fn submit_input(&mut self) {
-        let text = self.input_buffer.trim().to_string();
-        if text.is_empty() {
-            return;
-        }
-        self.input_buffer.clear();
+    pub async fn like_selected_post(&mut self) {
+        let target_event = match self.active_tab {
+            ActiveTab::Public => {
+                if let Some(idx) = self.selected_public_index {
+                    self.public_timeline.get(idx).cloned()
+                } else {
+                    self.public_timeline.last().cloned()
+                }
+            }
+            ActiveTab::Station => self.timeline.last().cloned(),
+        };
 
-        if text.starts_with('/') {
-            self.handle_command(&text).await;
-            return;
-        }
+        if let Some(target) = target_event {
+            if self.my_likes.contains(&target.id) {
+                self.status_toast = Some(("You already liked this note".to_string(), Instant::now()));
+                return;
+            }
 
+            let reaction = match EventBuilder::new(Kind::Reaction, "❤️")
+                .tag(Tag::event(target.id))
+                .tag(Tag::public_key(target.pubkey))
+                .finalize(&self.identity.keys)
+            {
+                Ok(ev) => ev,
+                Err(_) => return,
+            };
+
+            if let Some(store) = &self.relay_store {
+                let _ = store.add_event(reaction.clone()).await;
+            }
+            self.client_pool.publish(reaction);
+            self.my_likes.insert(target.id);
+            *self.post_likes.entry(target.id).or_insert(0) += 1;
+
+            let author_name = self.profiles.get(&target.pubkey).cloned().unwrap_or_else(|| {
+                let hex = target.pubkey.to_hex();
+                format!("{}..{}", &hex[..6], &hex[hex.len() - 4..])
+            });
+            self.status_toast = Some((format!("Liked note by {} ❤️", author_name), Instant::now()));
+        }
+    }
+
+    pub fn start_reply_to_selected(&mut self) {
+        let target_event = match self.active_tab {
+            ActiveTab::Public => {
+                if let Some(idx) = self.selected_public_index {
+                    self.public_timeline.get(idx).cloned()
+                } else {
+                    self.public_timeline.last().cloned()
+                }
+            }
+            ActiveTab::Station => self.timeline.last().cloned(),
+        };
+
+        if let Some(target) = target_event {
+            let author_name = self.profiles.get(&target.pubkey).cloned().unwrap_or_else(|| {
+                let hex = target.pubkey.to_hex();
+                format!("{}..{}", &hex[..6], &hex[hex.len() - 4..])
+            });
+            self.replying_to = Some(target);
+            self.input_mode = InputMode::Editing;
+            self.input_buffer.clear();
+            self.status_toast = Some((format!("Replying to {} (type message & press Enter)", author_name), Instant::now()));
+        }
+    }
+
+    async fn send_note(&mut self, text: String) {
         let deadair_tag = Tag::parse(["client", "deadair"]).unwrap_or_else(|_| Tag::hashtag("deadair"));
-        let event = match EventBuilder::new(Kind::TextNote, &text)
-            .tag(deadair_tag)
-            .finalize(&self.identity.keys)
-        {
+        let mut builder = EventBuilder::new(Kind::TextNote, &text).tag(deadair_tag);
+
+        if let Some(target) = self.replying_to.take() {
+            builder = builder
+                .tag(Tag::event(target.id))
+                .tag(Tag::public_key(target.pubkey));
+            *self.post_replies.entry(target.id).or_insert(0) += 1;
+        }
+
+        let event = match builder.finalize(&self.identity.keys) {
             Ok(ev) => ev,
             Err(_) => return,
         };
@@ -342,6 +506,21 @@ impl App {
             self.timeline.push(event);
             self.timeline.sort_by_key(|e| e.created_at);
         }
+    }
+
+    async fn submit_input(&mut self) {
+        let text = self.input_buffer.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        self.input_buffer.clear();
+
+        if text.starts_with('/') {
+            self.handle_command(&text).await;
+            return;
+        }
+
+        self.send_note(text).await;
     }
 
     async fn handle_command(&mut self, cmd: &str) {
@@ -430,8 +609,21 @@ impl App {
             ["/relay", "public"] => {
                 self.toggle_public_relays().await;
             }
+            ["/like"] => {
+                self.like_selected_post().await;
+            }
+            ["/reply"] => {
+                self.start_reply_to_selected();
+            }
+            _ if cmd.starts_with("/reply ") => {
+                let text = cmd.strip_prefix("/reply ").unwrap_or("").trim().to_string();
+                if !text.is_empty() {
+                    self.start_reply_to_selected();
+                    self.send_note(text).await;
+                }
+            }
             ["/help"] => {
-                self.status_toast = Some(("Commands: /tab [station|public] | /share | /name <nick> | /bookmark add <url> [name] | /relay public | /clear".to_string(), Instant::now()));
+                self.status_toast = Some(("Commands: /tab [station|public] | /like | /reply <msg> | /share | /name <nick> | /clear".to_string(), Instant::now()));
             }
             _ => {
                 self.status_toast = Some(("Unknown command. Type /help".to_string(), Instant::now()));
@@ -572,5 +764,93 @@ mod tests {
 
         app.handle_command("/tab").await;
         assert_eq!(app.active_tab, ActiveTab::Public);
+    }
+
+    #[tokio::test]
+    async fn test_social_browsing_like_and_reply() {
+        let mut app = App::new().await.expect("App should initialize");
+        app.active_tab = ActiveTab::Public;
+
+        let other_keys = Keys::generate();
+        let ev1 = EventBuilder::new(Kind::TextNote, "First public post")
+            .finalize(&other_keys)
+            .unwrap();
+        let ev2 = EventBuilder::new(Kind::TextNote, "Second public post")
+            .finalize(&other_keys)
+            .unwrap();
+
+        app.public_timeline.push(ev1.clone());
+        app.public_timeline.push(ev2.clone());
+        app.input_mode = InputMode::Normal;
+
+        // Press 'k' to browse older posts (from live stream to index 0)
+        app.handle_key(KeyEvent::from(KeyCode::Char('k'))).await;
+        assert_eq!(app.selected_public_index, Some(0));
+
+        // Press 'j' to move forward to index 1
+        app.handle_key(KeyEvent::from(KeyCode::Char('j'))).await;
+        assert_eq!(app.selected_public_index, Some(1));
+
+        // Press 'l' to like the selected post (ev2)
+        app.handle_key(KeyEvent::from(KeyCode::Char('l'))).await;
+        assert!(app.my_likes.contains(&ev2.id));
+        assert_eq!(app.post_likes.get(&ev2.id).copied(), Some(1));
+
+        // Press 'r' to start replying to ev2
+        app.handle_key(KeyEvent::from(KeyCode::Char('r'))).await;
+        assert_eq!(app.input_mode, InputMode::Editing);
+        assert_eq!(app.replying_to.as_ref().map(|e| e.id), Some(ev2.id));
+
+        // Send the reply note
+        app.send_note("Replying to second note".to_string()).await;
+        assert_eq!(app.replying_to, None);
+        assert_eq!(app.post_replies.get(&ev2.id).copied(), Some(1));
+
+        // Verify sent reply has correct 'e' and 'p' tags
+        let sent_reply = app.timeline.last().expect("Reply should be in timeline");
+        let has_e_tag = sent_reply.tags.event_ids().any(|id| id == ev2.id);
+        assert!(has_e_tag, "Reply event should tag parent event id");
+
+        // Press Esc to return to Normal mode
+        app.handle_key(KeyEvent::from(KeyCode::Esc)).await;
+        assert_eq!(app.input_mode, InputMode::Normal);
+
+        // Press 'g' to return to live stream
+        app.handle_key(KeyEvent::from(KeyCode::Char('g'))).await;
+        assert_eq!(app.selected_public_index, None);
+    }
+
+    #[tokio::test]
+    async fn test_social_metrics_aggregation() {
+        let mut app = App::new().await.expect("App should initialize");
+        let other_keys = Keys::generate();
+        let base_note = EventBuilder::new(Kind::TextNote, "Base public post")
+            .finalize(&other_keys)
+            .unwrap();
+        app.public_timeline.push(base_note.clone());
+
+        // Simulate incoming Kind::Reaction (Kind 7)
+        let reaction = EventBuilder::new(Kind::Reaction, "+")
+            .tag(Tag::event(base_note.id))
+            .finalize(&other_keys)
+            .unwrap();
+
+        app.inbound_event_tx
+            .send((reaction, "wss://nos.lol".to_string()))
+            .unwrap();
+        app.tick().await;
+        assert_eq!(app.post_likes.get(&base_note.id).copied(), Some(1));
+
+        // Simulate incoming Kind::Repost (Kind 6)
+        let repost = EventBuilder::new(Kind::Repost, "")
+            .tag(Tag::event(base_note.id))
+            .finalize(&other_keys)
+            .unwrap();
+
+        app.inbound_event_tx
+            .send((repost, "wss://nos.lol".to_string()))
+            .unwrap();
+        app.tick().await;
+        assert_eq!(app.post_reposts.get(&base_note.id).copied(), Some(1));
     }
 }

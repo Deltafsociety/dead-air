@@ -307,7 +307,15 @@
             </tr>
             <tr>
               <td><code>/tab [station|public]</code></td>
-              <td>Switch between DEADAIR Station chat and Public Mesh tabs.</td>
+              <td>Switch between DEADAIR Station chat and Public Social Mesh tabs.</td>
+            </tr>
+            <tr>
+              <td><code>/like</code></td>
+              <td>Like (❤️ Nostr Kind 7 reaction) the currently selected note in the public feed.</td>
+            </tr>
+            <tr>
+              <td><code>/reply &lt;msg&gt;</code></td>
+              <td>Send a threaded reply (Kind 1 with 'e' &amp; 'p' tags) to the selected note.</td>
             </tr>
             <tr>
               <td><code>/clear</code></td>
@@ -330,31 +338,35 @@
           <tbody>
             <tr>
               <td><code>Tab</code> or <code>t</code></td>
-              <td>Switch between DEADAIR Station and Public Relays tabs.</td>
+              <td>Switch between DEADAIR Station and Public Social Mesh tabs.</td>
             </tr>
             <tr>
               <td><code>1</code> or <code>2</code></td>
               <td>Jump directly to Station tab (1) or Public Mesh tab (2).</td>
             </tr>
             <tr>
-              <td><code>i</code> or <code>Enter</code></td>
-              <td>Enter compose mode to write notes or commands.</td>
+              <td><code>j</code> / <code>Down</code></td>
+              <td>Browse newer posts in Public feed (pauses live stream).</td>
             </tr>
             <tr>
-              <td><code>Esc</code></td>
-              <td>Exit compose mode to navigation mode.</td>
+              <td><code>k</code> / <code>Up</code></td>
+              <td>Browse older posts in Public feed (pauses live stream).</td>
             </tr>
             <tr>
-              <td><code>s</code></td>
-              <td>Show domestic share address and handle.</td>
+              <td><code>g</code> or <code>Home</code></td>
+              <td>Resume live streaming feed in Public tab.</td>
             </tr>
             <tr>
-              <td><code>b</code></td>
-              <td>Reconnect all saved domestic relay bookmarks.</td>
+              <td><code>l</code> or <code>L</code></td>
+              <td>Like (❤️ Kind 7 reaction) the selected public note.</td>
             </tr>
             <tr>
-              <td><code>r</code> or <code>F2</code></td>
-              <td>Toggle the embedded relay on or off (port 4869).</td>
+              <td><code>r</code> (Public tab)</td>
+              <td>Reply (💬 threaded Kind 1 note) to the selected public post.</td>
+            </tr>
+            <tr>
+              <td><code>r</code> or <code>F2</code> (Station tab)</td>
+              <td>Toggle embedded relay on or off (port 4869).</td>
             </tr>
             <tr>
               <td><code>p</code></td>
@@ -493,7 +505,15 @@ cargo build --release
             </tr>
             <tr>
               <td><code>/tab [station|public]</code></td>
-              <td>جابه‌جایی میان برگه گفتگوهای DEADAIR و برگه رله‌های عمومی.</td>
+              <td>جابه‌جایی میان برگه گفتگوهای DEADAIR و برگه شبکه اجتماعی رله‌های عمومی.</td>
+            </tr>
+            <tr>
+              <td><code>/like</code></td>
+              <td>پسندیدن (واکنش نوستر Kind 7) یادداشت عمومی انتخاب‌شده.</td>
+            </tr>
+            <tr>
+              <td><code>/reply &lt;پیام&gt;</code></td>
+              <td>ارسال پاسخ رشته‌ای (Kind 1 با تگ‌های ارجاع) به پست انتخاب‌شده.</td>
             </tr>
             <tr>
               <td><code>/clear</code></td>
@@ -516,30 +536,34 @@ cargo build --release
           <tbody>
             <tr>
               <td><code>Tab</code> یا <code>t</code></td>
-              <td>جابه‌جایی سریع میان برگه ایستگاه DEADAIR و رله‌های عمومی.</td>
+              <td>جابه‌جایی سریع میان برگه ایستگاه DEADAIR و شبکه اجتماعی رله‌های عمومی.</td>
             </tr>
             <tr>
               <td><code>1</code> یا <code>2</code></td>
-              <td>پرش مستقیم به برگه ایستگاه (1) یا برگه عمومی (2).</td>
+              <td>پرش مستقیم به برگه ایستگاه (1) یا برگه شبکه عمومی (2).</td>
             </tr>
             <tr>
-              <td><code>i</code> یا <code>Enter</code></td>
-              <td>ورود به حالت نوشتن پیام یا دستور.</td>
+              <td><code>j</code> / <code>Down</code></td>
+              <td>حرکت به سمت پست‌های تازه‌تر در برگه عمومی (مکث جریان زنده).</td>
             </tr>
             <tr>
-              <td><code>Esc</code></td>
-              <td>خروج از حالت نوشتن و ورود به حالت ناوبری.</td>
+              <td><code>k</code> / <code>Up</code></td>
+              <td>حرکت به سمت پست‌های قدیمی‌تر در برگه عمومی (مکث جریان زنده).</td>
             </tr>
             <tr>
-              <td><code>s</code></td>
-              <td>نمایش آدرس اتصال داخلی جهت اشتراک‌گذاری.</td>
+              <td><code>g</code> یا <code>Home</code></td>
+              <td>از سرگیری جریان زنده پیام‌ها در برگه عمومی.</td>
             </tr>
             <tr>
-              <td><code>b</code></td>
-              <td>اتصال مجدد به تمامی نشانک‌های داخلی.</td>
+              <td><code>l</code> یا <code>L</code></td>
+              <td>لایک کردن (❤️ واکنش Kind 7) پست عمومی انتخاب‌شده.</td>
             </tr>
             <tr>
-              <td><code>r</code> یا <code>F2</code></td>
+              <td><code>r</code> (برگه عمومی)</td>
+              <td>ارسال پاسخ به پست انتخاب‌شده (💬 پاسخ رشته‌ای).</td>
+            </tr>
+            <tr>
+              <td><code>r</code> یا <code>F2</code> (برگه ایستگاه)</td>
               <td>روشن یا خاموش کردن رله داخلی روی پورت 4869.</td>
             </tr>
             <tr>

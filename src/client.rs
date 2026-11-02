@@ -94,6 +94,8 @@ async fn relay_worker(
                     vec![
                         Filter::new().kind(Kind::TextNote).limit(200),
                         Filter::new().kind(Kind::Metadata).limit(200),
+                        Filter::new().kind(Kind::Reaction).limit(200),
+                        Filter::new().kind(Kind::Repost).limit(100),
                     ],
                 );
                 let _ = ws_sender.send(Message::text(sub_req.as_json())).await;

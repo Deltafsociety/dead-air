@@ -88,7 +88,9 @@ cargo build --release
 ### Command and Shortcut Reference
 
 #### Interactive Commands
-* `/tab [station|public]`: Switch between DEADAIR station chat and public relays mesh.
+* `/tab [station|public]`: Switch between DEADAIR station chat and public social mesh.
+* `/like`: Like (Nostr Kind 7 reaction) the currently selected public note.
+* `/reply <msg>`: Threaded reply (Nostr Kind 1 note with event & pubkey tags) to the selected note.
 * `/clear`: Clear timeline messages in the active tab.
 * `/name <nick>`: Set your display handle and publish your profile.
 * `/share`: Output your domestic connection string and handle.
@@ -103,14 +105,20 @@ cargo build --release
 #### Keyboard Controls
 | Key | Action |
 | :--- | :--- |
-| `Tab` or `t` | Switch between DEADAIR Station and Public Relays tabs |
+| `Tab` or `t` | Switch between DEADAIR Station and Public Social Mesh tabs |
 | `1` or `2` | Jump directly to Station tab (`1`) or Public Mesh tab (`2`) |
+| `j` / `Down` | Browse newer posts in Public feed (pauses live stream) |
+| `k` / `Up` | Browse older posts in Public feed (pauses live stream) |
+| `g` or `Home` | Resume live streaming feed in Public tab |
+| `G` or `End` | Jump to the earliest cached note in Public feed |
+| `l` or `L` | Like (❤️ Kind 7 reaction) the selected public note |
+| `r` (Public tab) | Reply (💬 threaded Kind 1 note) to the selected public post |
+| `r` / `F2` (Station tab) | Toggle embedded relay (`0.0.0.0:4869`) |
 | `i` or `Enter` | Enter compose mode |
 | `Enter` (in compose) | Broadcast message or execute command |
-| `Esc` | Exit write mode to navigation mode |
+| `Esc` | Exit compose mode to navigation mode / resume live stream |
 | `s` | Display domestic share address |
 | `b` | Reconnect all saved domestic bookmarks |
-| `r` or `F2` | Toggle embedded relay (`0.0.0.0:4869`) |
 | `p` | Toggle global public relays |
 | `c` | Clear the active timeline tab |
 | `q` or `Ctrl+C` | Exit DEADAIR |
