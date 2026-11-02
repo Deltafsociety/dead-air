@@ -73,6 +73,12 @@ Static standalone binaries are available on the [Releases page](https://github.c
 
 #### Building from Source
 ```bash
+# Direct install via Cargo (guarantees binary is tailored to your CPU)
+cargo install --git https://github.com/deltafsociety/dead-air.git
+
+# Or build from local clone
+git clone https://github.com/deltafsociety/dead-air.git
+cd dead-air
 cargo build --release
 ./target/release/deadair
 ```

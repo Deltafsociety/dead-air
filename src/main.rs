@@ -20,6 +20,27 @@ use ratatui::Terminal;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "-v" | "--version" | "-V" => {
+                println!("deadair {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
+            "-h" | "--help" => {
+                println!("deadair {}\n{}", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_DESCRIPTION"));
+                println!();
+                println!("Usage: deadair [OPTIONS]");
+                println!();
+                println!("Options:");
+                println!("  -h, --help       Print help information");
+                println!("  -v, --version    Print version information");
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();

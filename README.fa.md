@@ -73,6 +73,12 @@ deadair
 
 #### ساخت از روی سورس کد
 ```bash
+# نصب مستقیم با Cargo (تضمین سازگاری کامل با پردازنده دستگاه شما)
+cargo install --git https://github.com/deltafsociety/dead-air.git
+
+# یا ساخت دستی از روی کلون پروژه
+git clone https://github.com/deltafsociety/dead-air.git
+cd dead-air
 cargo build --release
 ./target/release/deadair
 ```
